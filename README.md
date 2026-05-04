@@ -1,70 +1,278 @@
-# Getting Started with Create React App
+# NFL Fantasy Playoff Survivor League
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A full-stack web app for running an NFL Fantasy Playoff Survivor League.
+Players pick a QB, RB, and WR/TE each playoff week without ever reusing a player.
+Highest scorer after the Super Bowl wins the pot.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## Tech Stack
 
-### `npm start`
+| Layer        | Technology                              |
+|-------------|------------------------------------------|
+| Frontend    | React 19, React Router, Tailwind CSS     |
+| Backend     | Node.js, Express                         |
+| Database    | SQLite (via better-sqlite3)              |
+| Auth        | Magic-link email login + JWT             |
+| Sports Data | Adapter/provider pattern (mock default)  |
+| Tests       | Jest + Supertest                         |
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Quick Start (Local Development)
 
-### `npm test`
+### Prerequisites
+- Node.js 18+
+- npm 9+
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### 1. Clone and install
 
-### `npm run build`
+```bash
+git clone <repo-url>
+cd zenithailabs
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+# Install frontend dependencies
+npm install
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+# Install backend dependencies
+cd backend && npm install && cd ..
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### 2. Configure environment variables
 
-### `npm run eject`
+```bash
+cp .env.example .env
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Edit `.env` — the defaults work for local dev. The only required change for production is `JWT_SECRET`.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 3. Migrate the database and load seed data
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```bash
+cd backend
+node db/seed.js
+cd ..
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+This creates `data/survivor.db` and loads:
+- 1 admin user: `admin@zenithailabs.com`
+- 7 player accounts: `alice@example.com`, `bob@example.com`, `charlie@example.com`, `diana@example.com`, `evan@example.com`, `fiona@example.com`, `george@example.com`
+- 28 NFL players (QBs, RBs, WRs, TEs)
+- 4 playoff weeks with sample lock times
+- Sample lineups for Weeks 1 and 2
+- Sample player stats
+- Payout rules for all tier sizes
 
-## Learn More
+### 4. Start the backend
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+cd backend
+npm start          # or: npm run dev  (auto-restarts on file changes)
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+The API will be available at `http://localhost:3001`.
 
-### Code Splitting
+### 5. Start the frontend (in a separate terminal)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+```bash
+# from project root
+npm start
+```
 
-### Analyzing the Bundle Size
+The app will open at `http://localhost:3000`.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### 6. Log in
 
-### Making a Progressive Web App
+1. Go to `http://localhost:3000`
+2. Click **Join / Log In**
+3. Enter any of the seed email addresses
+4. The magic link will be **printed to the backend console** (no email config needed in dev)
+5. Copy the link and open it in your browser
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+---
 
-### Advanced Configuration
+## Running Tests
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+Backend tests (Jest + Supertest):
 
-### Deployment
+```bash
+cd backend
+npm test
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Tests cover:
+- Scoring engine (yards, TDs, INTs, no-negative QB rush)
+- No-repeat player rule enforcement
+- Lineup lock deadline enforcement
+- Payout calculations (all 6 tiers)
+- Role-based access control (admin vs player)
+- NFL API adapter / mock provider
+- Standings ranking
 
-### `npm run build` fails to minify
+Frontend tests (CRA default):
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+# from project root
+npm test
+```
+
+---
+
+## Environment Variables
+
+See `.env.example` for the full list with comments.
+
+Key variables:
+
+| Variable              | Default                   | Description                              |
+|-----------------------|---------------------------|------------------------------------------|
+| `PORT`                | `3001`                    | Backend server port                      |
+| `DATABASE_PATH`       | `./data/survivor.db`      | SQLite file path                         |
+| `JWT_SECRET`          | `change_me_...`           | **Change in production**                 |
+| `APP_URL`             | `http://localhost:3000`   | Frontend URL (used in magic link emails) |
+| `REACT_APP_API_URL`   | `http://localhost:3001`   | Backend API URL (read by React)          |
+| `NFL_API_PROVIDER`    | `mock`                    | NFL data provider key                    |
+| `SMTP_HOST`           | *(blank)*                 | SMTP server for email delivery           |
+
+---
+
+## How to Swap in a Real NFL Stats API
+
+The app uses a **provider adapter pattern**. All NFL data flows through:
+
+```
+src/api/client.js  →  backend/services/nflApi/adapter.js  →  [provider]
+```
+
+### Steps to add a real provider
+
+1. Create a new file in `backend/services/nflApi/`, e.g. `sportsDataProvider.js`
+
+2. Implement these four functions (same signatures as `mockProvider.js`):
+
+```js
+async function getNFLPlayoffGames(weekId) { ... }
+async function getEligiblePlayers(weekId) { ... }
+async function getPlayerStats(weekId)     { ... }
+async function getKickoffTimes(weekId)    { ... }
+
+module.exports = { getNFLPlayoffGames, getEligiblePlayers, getPlayerStats, getKickoffTimes };
+```
+
+3. Register your provider in `backend/services/nflApi/adapter.js`:
+
+```js
+// Add a case in the getProvider() switch:
+case 'sportsdata':
+  return require('./sportsDataProvider');
+```
+
+4. Set in `.env`:
+
+```
+NFL_API_PROVIDER=sportsdata
+NFL_API_KEY=your_api_key_here
+```
+
+### Provider Notes
+
+| Provider       | Key          | Docs / Notes                                    |
+|----------------|--------------|-------------------------------------------------|
+| SportsData.io  | `sportsdata` | https://sportsdata.io — paid, comprehensive     |
+| Sleeper API    | `sleeper`    | https://docs.sleeper.com — free, no key needed  |
+| API-Sports     | `apisports`  | https://api-sports.io — freemium                |
+| ESPN (scrape)  | —            | No official API; not recommended                |
+
+---
+
+## Project Structure
+
+```
+zenithailabs/
+├── backend/
+│   ├── server.js                  # Express entry point
+│   ├── db/
+│   │   ├── schema.sql             # Full DB schema (15 tables)
+│   │   ├── database.js            # SQLite connection singleton
+│   │   ├── migrate.js             # Schema migration runner
+│   │   └── seed.js                # Demo data seeder
+│   ├── middleware/
+│   │   └── auth.js                # JWT require/admin middleware
+│   ├── routes/
+│   │   ├── auth.js                # Magic link + JWT verify
+│   │   ├── players.js             # NFL player lookup
+│   │   ├── lineups.js             # Lineup submit/view
+│   │   ├── scores.js              # Score calculation + retrieval
+│   │   ├── standings.js           # Season standings
+│   │   ├── payouts.js             # Payout projections
+│   │   └── admin.js               # All admin management routes
+│   ├── services/
+│   │   ├── scoringEngine.js       # Pure scoring functions
+│   │   ├── payoutService.js       # Pure payout functions
+│   │   ├── auditService.js        # Centralized audit logging
+│   │   └── nflApi/
+│   │       ├── adapter.js         # Provider interface + switcher
+│   │       └── mockProvider.js    # Default mock (uses seeded DB)
+│   └── tests/
+│       ├── scoringEngine.test.js
+│       ├── payoutService.test.js
+│       ├── nflApi.test.js
+│       └── lineupRules.test.js
+├── src/
+│   ├── App.js                     # Router + auth guards
+│   ├── api/client.js              # Axios API client (all endpoints)
+│   ├── contexts/AuthContext.js    # JWT auth state
+│   ├── pages/
+│   │   ├── LandingPage.js         # Public marketing/rules page
+│   │   ├── LoginPage.js           # Magic link request form
+│   │   ├── MagicLinkPage.js       # Token verify + redirect
+│   │   ├── PlayerDashboard.js     # Player picks, standings, payouts
+│   │   └── AdminDashboard.js      # Full admin management UI
+│   └── components/
+│       ├── Navbar.js
+│       ├── LineupBuilder.js       # Pick QB/RB/FLEX with validation
+│       ├── PicksHistory.js        # Weekly picks + per-slot scores
+│       ├── Standings.js           # League rankings table
+│       └── PayoutTable.js         # Payout projections display
+├── .env.example                   # All env vars documented
+├── tailwind.config.js
+├── postcss.config.js
+└── README.md
+```
+
+---
+
+## Scoring Rules
+
+| Stat                  | Points        |
+|-----------------------|---------------|
+| Yards (all types)     | +1 per yard   |
+| Touchdowns (all)      | +25 each      |
+| Interceptions (QB)    | -25 each      |
+| QB Rushing Yards      | Always +1/yd  |
+
+No negative points for QB rushing yards (they simply add to total).
+
+---
+
+## Payout Tiers
+
+| Players  | 1st  | 2nd | 3rd  | 4th | House |
+|----------|------|-----|------|-----|-------|
+| 1 – 5    | 90%  | —   | —    | —   | 10%   |
+| 6 – 10   | 70%  | 20% | —    | —   | 10%   |
+| 11 – 15  | 60%  | 25% | 5%   | —   | 10%   |
+| 16 – 20  | 55%  | 25% | 10%  | —   | 10%   |
+| 21 – 30  | 50%  | 25% | 15%  | —   | 10%   |
+| 31 – 50  | 50%  | 20% | 15%  | 5%  | 10%   |
+
+---
+
+## TODOs / Configurable Points
+
+- `NFL_API_PROVIDER`: swap mock for a real provider (see above)
+- `SMTP_*`: configure real email delivery (Mailgun, SendGrid, etc.)
+- Lineup override UI in AdminDashboard (API endpoint exists; UI is a stub)
+- Player elimination logic (currently not auto-computed)
+- Payment recording UI (admin can mark paid; Venmo/Zelle integration not included)
+- Season archival and multi-season history views
