@@ -1,0 +1,69 @@
+entity_type,school_name,athlete_name,conference,position,preseason_rank,odds,source,eligible_categories
+athlete,Georgia,Quinn Stryker,SEC,QB,1,700,sample,heisman
+athlete,Texas,Marcus Hale,SEC,QB,3,800,sample,heisman
+athlete,Ohio State,Jaden Pierce,Big Ten,QB,2,850,sample,heisman
+athlete,Oregon,Ronan Vega,Big Ten,QB,4,1200,sample,heisman
+athlete,Alabama,Tariq Bell,SEC,RB,5,1500,sample,heisman
+athlete,Penn State,Owen Briggs,Big Ten,QB,6,1800,sample,heisman
+athlete,Michigan,Devon Mariner,Big Ten,QB,7,2200,sample,heisman
+athlete,Notre Dame,Silas Penn,ACC,QB,8,2500,sample,heisman
+athlete,LSU,Kade Roman,SEC,WR,9,2800,sample,heisman
+athlete,Florida State,Beau Harlan,ACC,QB,10,3000,sample,heisman
+school,Georgia,,SEC,,1,450,sample,cfp
+school,Ohio State,,Big Ten,,2,500,sample,cfp
+school,Texas,,SEC,,3,650,sample,cfp
+school,Oregon,,Big Ten,,4,750,sample,cfp
+school,Alabama,,SEC,,5,900,sample,cfp
+school,Penn State,,Big Ten,,6,1100,sample,cfp
+school,Michigan,,Big Ten,,7,1300,sample,cfp
+school,Notre Dame,,ACC,,8,1500,sample,cfp
+school,LSU,,SEC,,9,1800,sample,cfp
+school,Florida State,,ACC,,10,2000,sample,cfp
+school,Clemson,,ACC,,11,2200,sample,cfp
+school,USC,,Big Ten,,12,2500,sample,cfp
+school,Tennessee,,SEC,,13,2800,sample,cfp
+school,Oklahoma,,SEC,,14,3200,sample,cfp
+school,BYU,,Big 12,,28,1500,sample,cinderella
+school,Colorado,,Big 12,,30,1800,sample,cinderella
+school,Memphis,,AAC,,32,2000,sample,cinderella
+school,Tulane,,AAC,,33,2200,sample,cinderella
+school,Boise State,,Mountain West,,34,2500,sample,cinderella
+school,James Madison,,Sun Belt,,35,2800,sample,cinderella
+school,SMU,,ACC,,36,3000,sample,cinderella
+school,UNLV,,Mountain West,,38,3500,sample,cinderella
+school,Liberty,,Conference USA,,40,4000,sample,cinderella
+school,Toledo,,MAC,,42,4500,sample,cinderella
+school,Coastal Carolina,,Sun Belt,,44,5000,sample,cinderella
+school,Western Kentucky,,Conference USA,,45,5500,sample,cinderella
+school,Air Force,,Mountain West,,46,6000,sample,cinderella
+school,Marshall,,Sun Belt,,48,6500,sample,cinderella
+school,Georgia (SEC),,SEC,,1,250,sample,conference_champion
+school,Texas (SEC),,SEC,,3,350,sample,conference_champion
+school,Alabama (SEC),,SEC,,5,500,sample,conference_champion
+school,LSU (SEC),,SEC,,9,900,sample,conference_champion
+school,Tennessee (SEC),,SEC,,13,1500,sample,conference_champion
+school,Auburn (SEC),,SEC,,17,2200,sample,conference_champion
+school,Ohio State (B1G),,Big Ten,,2,280,sample,conference_champion
+school,Oregon (B1G),,Big Ten,,4,400,sample,conference_champion
+school,Penn State (B1G),,Big Ten,,6,800,sample,conference_champion
+school,Michigan (B1G),,Big Ten,,7,1000,sample,conference_champion
+school,USC (B1G),,Big Ten,,12,1800,sample,conference_champion
+school,Iowa (B1G),,Big Ten,,19,2500,sample,conference_champion
+school,Utah (B12),,Big 12,,15,350,sample,conference_champion
+school,Kansas State (B12),,Big 12,,21,500,sample,conference_champion
+school,Iowa State (B12),,Big 12,,24,800,sample,conference_champion
+school,Oklahoma State (B12),,Big 12,,26,1100,sample,conference_champion
+school,TCU (B12),,Big 12,,27,1400,sample,conference_champion
+school,Baylor (B12),,Big 12,,31,1800,sample,conference_champion
+school,Florida State (ACC),,ACC,,10,350,sample,conference_champion
+school,Clemson (ACC),,ACC,,11,400,sample,conference_champion
+school,Miami (ACC),,ACC,,16,600,sample,conference_champion
+school,North Carolina (ACC),,ACC,,25,1200,sample,conference_champion
+school,Louisville (ACC),,ACC,,29,1500,sample,conference_champion
+school,Pittsburgh (ACC),,ACC,,39,2400,sample,conference_champion
+school,Washington State (P12),,Pac-12,,33,250,sample,conference_champion
+school,Oregon State (P12),,Pac-12,,34,280,sample,conference_champion
+school,Boise State (P12),,Pac-12,,28,350,sample,conference_champion
+school,San Diego State (P12),,Pac-12,,47,700,sample,conference_champion
+school,Fresno State (P12),,Pac-12,,49,900,sample,conference_champion
+school,Colorado State (P12),,Pac-12,,53,1500,sample,conference_champion

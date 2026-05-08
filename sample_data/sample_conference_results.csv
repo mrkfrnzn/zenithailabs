@@ -1,0 +1,31 @@
+school_name,conference,outcome
+Texas (SEC),SEC,wins_conference_title_game
+Georgia (SEC),SEC,loses_conference_title_game
+Alabama (SEC),SEC,fails_to_qualify
+LSU (SEC),SEC,fails_to_qualify
+Tennessee (SEC),SEC,fails_to_qualify
+Auburn (SEC),SEC,fails_to_qualify
+Ohio State (B1G),Big Ten,wins_conference_title_game
+Oregon (B1G),Big Ten,loses_conference_title_game
+Penn State (B1G),Big Ten,fails_to_qualify
+Michigan (B1G),Big Ten,fails_to_qualify
+USC (B1G),Big Ten,fails_to_qualify
+Iowa (B1G),Big Ten,fails_to_qualify
+Iowa State (B12),Big 12,wins_conference_title_game
+Utah (B12),Big 12,loses_conference_title_game
+Kansas State (B12),Big 12,fails_to_qualify
+Oklahoma State (B12),Big 12,fails_to_qualify
+TCU (B12),Big 12,fails_to_qualify
+Baylor (B12),Big 12,fails_to_qualify
+Clemson (ACC),ACC,wins_conference_title_game
+Miami (ACC),ACC,loses_conference_title_game
+Florida State (ACC),ACC,fails_to_qualify
+North Carolina (ACC),ACC,fails_to_qualify
+Louisville (ACC),ACC,fails_to_qualify
+Pittsburgh (ACC),ACC,fails_to_qualify
+Boise State (P12),Pac-12,wins_conference_title_game
+Washington State (P12),Pac-12,loses_conference_title_game
+Oregon State (P12),Pac-12,fails_to_qualify
+San Diego State (P12),Pac-12,fails_to_qualify
+Fresno State (P12),Pac-12,fails_to_qualify
+Colorado State (P12),Pac-12,fails_to_qualify
