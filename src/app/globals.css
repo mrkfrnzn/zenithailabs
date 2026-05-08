@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #0b1020;
+  color: #e2e8f0;
+  min-height: 100%;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar — dark sportsbook feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b1020;
+}
+::-webkit-scrollbar-thumb {
+  background: #263a56;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #F59E0B;
+}
+
+@layer components {
+  /* ─── Buttons ─────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+  .btn-primary {
+    @apply btn bg-chest-gold hover:bg-chest-gold-light text-slate-900 shadow-gold-sm hover:shadow-gold active:scale-95;
+  }
+  .btn-secondary {
+    @apply btn bg-[#152033] hover:bg-[#1e2d45] text-slate-100 border border-[#263a56] hover:border-chest-gold/40;
+  }
+  .btn-danger {
+    @apply btn bg-chest-red hover:bg-chest-red-light text-white;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent hover:bg-[#152033] text-slate-200 border border-[#1e2d45] hover:border-[#263a56];
+  }
+  .btn-blue {
+    @apply btn bg-chest-blue hover:bg-chest-blue-light text-white;
+  }
+  .btn-sm {
+    @apply px-3 py-1 text-xs;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  /* ─── Form ────────────────────────────────────────────── */
+  .input {
+    @apply w-full px-3 py-2.5 rounded-lg bg-[#0b1220] border border-[#1e2d45] text-slate-100 placeholder-slate-500 focus:border-chest-gold focus:outline-none focus:ring-1 focus:ring-chest-gold/30 transition-colors;
+  }
+  .label {
+    @apply block text-sm font-medium text-slate-300 mb-1.5;
+  }
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+
+  /* ─── Panels / Cards ──────────────────────────────────── */
+  .panel {
+    @apply bg-[#0f1929] border border-[#1e2d45] rounded-xl p-5 shadow-card;
+  }
+  .panel-tight {
+    @apply bg-[#0f1929] border border-[#1e2d45] rounded-xl p-3 shadow-card;
+  }
+  .panel-gold {
+    @apply panel border-chest-gold/30 shadow-gold-sm;
+  }
+  .panel-glass {
+    @apply bg-slate-900/40 backdrop-blur-sm border border-[#1e2d45] rounded-xl p-5;
+  }
+
+  /* ─── Card (hover lift) ───────────────────────────────── */
+  .card {
+    @apply panel transition-all duration-200 hover:border-[#263a56] hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+
+  /* ─── Table ───────────────────────────────────────────── */
+  .table {
+    @apply w-full text-sm;
+  }
+  .table th {
+    @apply text-left px-3 py-2.5 text-chest-subtle font-semibold text-xs uppercase tracking-wider border-b border-[#1e2d45] sticky top-0 bg-[#0f1929];
+  }
+  .table td {
+    @apply px-3 py-2.5 border-b border-[#152033] align-middle;
+  }
+  .table tbody tr {
+    @apply transition-colors hover:bg-[#152033]/60;
+  }
+
+  /* ─── Badges ──────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold tracking-wide;
+  }
+  .badge-amber {
+    @apply badge bg-amber-500/15 text-amber-300 border border-amber-500/30 ring-0;
+  }
+  .badge-blue {
+    @apply badge bg-blue-500/15 text-blue-300 border border-blue-500/30;
+  }
+  .badge-green {
+    @apply badge bg-green-500/15 text-green-300 border border-green-500/30;
+  }
+  .badge-red {
+    @apply badge bg-red-500/15 text-red-300 border border-red-500/30;
+  }
+  .badge-slate {
+    @apply badge bg-[#152033] text-slate-300 border border-[#263a56];
+  }
+  .badge-gold {
+    @apply badge bg-chest-gold/15 text-chest-gold border border-chest-gold/30;
+  }
+
+  /* ─── Section headings ────────────────────────────────── */
+  .section-header {
+    @apply text-xs font-bold uppercase tracking-widest text-chest-muted mb-3;
+  }
+
+  /* ─── Stat box (for scoreboards) ─────────────────────── */
+  .stat-box {
+    @apply panel text-center;
+  }
+  .stat-value {
+    @apply text-3xl font-black tabular-nums text-chest-gold;
+  }
+  .stat-label {
+    @apply text-xs text-chest-muted uppercase tracking-wider mt-1;
+  }
+
+  /* ─── On-the-clock pulse ──────────────────────────────── */
+  .on-the-clock {
+    @apply animate-pulse-gold border-chest-gold/40;
+  }
+
+  /* ─── Gold gradient text ──────────────────────────────── */
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #F59E0B 0%, #FCD34D 50%, #F59E0B 100%);
+  }
+
+  /* ─── Divider ─────────────────────────────────────────── */
+  .divider {
+    @apply border-t border-[#1e2d45] my-4;
+  }
+
+  /* ─── Odds chip ───────────────────────────────────────── */
+  .odds-chip {
+    @apply inline-flex items-center px-2 py-0.5 rounded bg-[#152033] border border-[#263a56] text-xs font-mono font-semibold text-chest-gold;
+  }
+
+  /* ─── Alert strip ─────────────────────────────────────── */
+  .alert-info {
+    @apply px-4 py-3 rounded-lg bg-chest-blue/10 border border-chest-blue/30 text-blue-200 text-sm;
+  }
+  .alert-success {
+    @apply px-4 py-3 rounded-lg bg-chest-green/10 border border-chest-green/30 text-green-200 text-sm;
+  }
+  .alert-warning {
+    @apply px-4 py-3 rounded-lg bg-chest-gold/10 border border-chest-gold/30 text-amber-200 text-sm;
+  }
+  .alert-error {
+    @apply px-4 py-3 rounded-lg bg-chest-red/10 border border-chest-red/30 text-red-200 text-sm;
+  }
+}

@@ -1,0 +1,256 @@
+// CFB War Chest - Prisma schema
+// SQLite for local MVP. Swap provider to postgresql for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String
+  passwordHash String
+  role         String   @default("player") // "admin" | "player"
+  createdAt    DateTime @default(now())
+
+  createdLeagues   League[]            @relation("LeagueCreator")
+  memberships      LeagueMember[]
+  draftPicks       DraftPick[]
+  trashTalkPosts   TrashTalkPost[]
+  resultImports    ResultImport[]
+  auditLogs        AuditLog[]
+  sessions         Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model League {
+  id            String   @id @default(cuid())
+  name          String
+  seasonYear    Int
+  status        String   @default("setup")
+  // setup | data_imported | draft_ready | drafting | drafted | scoring | completed
+  settingsJson  String   @default("{}") // JSON-encoded league settings
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  createdBy        User                @relation("LeagueCreator", fields: [createdById], references: [id])
+  members          LeagueMember[]
+  draftableEntities DraftableEntity[]
+  draftSegments    DraftSegment[]
+  draftPicks       DraftPick[]
+  draftState       DraftState?
+  scoringConfigs   ScoringConfig[]
+  resultImports    ResultImport[]
+  resultRows       ResultRow[]
+  scores           Score[]
+  trashTalkPosts   TrashTalkPost[]
+  auditLogs        AuditLog[]
+}
+
+model LeagueMember {
+  id            String   @id @default(cuid())
+  leagueId      String
+  userId        String
+  displayName   String
+  roleInLeague  String   @default("player")
+  draftPosition Int?     // 1-based slot in draft order
+  createdAt     DateTime @default(now())
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@index([leagueId])
+}
+
+model DraftableEntity {
+  id                    String   @id @default(cuid())
+  leagueId              String
+  entityType            String   // "athlete" | "school"
+  athleteName           String?
+  schoolName            String
+  conference            String?
+  position              String?
+  preseasonRank         Int?
+  oddsAmerican          Int      // stored as integer; use sign convention from import
+  oddsSource            String?
+  eligibleCategoriesJson String  @default("[]") // ["heisman","cfp","cinderella","conference_champion"]
+  rawImportJson         String?
+  normalizedName        String
+  locked                Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  league       League      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  draftPicks   DraftPick[]
+  resultRows   ResultRow[]
+
+  @@index([leagueId, entityType])
+  @@index([leagueId, normalizedName])
+}
+
+model DraftSegment {
+  id                  String   @id @default(cuid())
+  leagueId            String
+  category            String   // "heisman" | "cfp" | "cinderella" | "conference_champion"
+  segmentOrder        Int
+  pickCountPerPlayer  Int
+  status              String   @default("pending") // pending | active | complete
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  picks  DraftPick[]
+  draftStateCurrent DraftState[]
+
+  @@unique([leagueId, segmentOrder])
+}
+
+model DraftPick {
+  id                 String   @id @default(cuid())
+  leagueId           String
+  draftSegmentId     String
+  roundNumber        Int
+  overallPickNumber  Int
+  playerUserId       String
+  draftableEntityId  String
+  category           String
+  lockedOdds         Int
+  pickTimestamp      DateTime @default(now())
+  adminOverride      Boolean  @default(false)
+  overrideReason     String?
+
+  league          League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  draftSegment    DraftSegment    @relation(fields: [draftSegmentId], references: [id], onDelete: Cascade)
+  player          User            @relation(fields: [playerUserId], references: [id])
+  draftableEntity DraftableEntity @relation(fields: [draftableEntityId], references: [id])
+  scores          Score[]
+
+  @@unique([leagueId, overallPickNumber])
+  @@index([leagueId, category])
+  @@index([leagueId, playerUserId])
+}
+
+model DraftState {
+  id                       String   @id @default(cuid())
+  leagueId                 String   @unique
+  status                   String   @default("not_started") // not_started | active | paused | complete
+  currentSegmentId         String?
+  currentOverallPickNumber Int      @default(0)
+  currentPlayerUserId      String?
+  paused                   Boolean  @default(false)
+  updatedAt                DateTime @updatedAt
+  // Tick is incremented every time the state changes. Used for SSE/polling sync.
+  tick                     Int      @default(0)
+
+  league          League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  currentSegment  DraftSegment? @relation(fields: [currentSegmentId], references: [id])
+}
+
+model ScoringConfig {
+  id        String   @id @default(cuid())
+  leagueId  String
+  category  String
+  configJson String  // JSON: { multipliers: {...}, formula: ..., locked: bool }
+  locked    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, category])
+}
+
+model ResultImport {
+  id          String   @id @default(cuid())
+  leagueId    String
+  resultType  String   // "heisman" | "cfp" | "cinderella" | "conference"
+  fileName    String?
+  status      String   @default("draft") // draft | reviewed | applied
+  rawRowsJson String   @default("[]")
+  createdById String
+  createdAt   DateTime @default(now())
+
+  league    League      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  createdBy User        @relation(fields: [createdById], references: [id])
+  rows      ResultRow[]
+}
+
+model ResultRow {
+  id                  String  @id @default(cuid())
+  resultImportId      String
+  leagueId            String
+  matchedEntityId     String?
+  rawRowJson          String
+  normalizedValuesJson String @default("{}")
+  outcome             String?
+  matchStatus         String  @default("unmatched") // unmatched | matched | manual | conflict | ignored
+  adminNotes          String?
+
+  resultImport   ResultImport     @relation(fields: [resultImportId], references: [id], onDelete: Cascade)
+  league         League           @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  matchedEntity  DraftableEntity? @relation(fields: [matchedEntityId], references: [id])
+}
+
+model Score {
+  id              String   @id @default(cuid())
+  leagueId        String
+  draftPickId     String
+  category        String
+  outcome         String
+  points          Float
+  calculationJson String   @default("{}")
+  published       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  league    League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  draftPick DraftPick @relation(fields: [draftPickId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, draftPickId])
+}
+
+model TrashTalkPost {
+  id        String   @id @default(cuid())
+  leagueId  String
+  userId    String
+  body      String
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([leagueId, createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  leagueId     String?
+  actorUserId  String?
+  action       String
+  entityType   String?
+  entityId     String?
+  beforeJson   String?
+  afterJson    String?
+  createdAt    DateTime @default(now())
+
+  league League? @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  actor  User?   @relation(fields: [actorUserId], references: [id])
+
+  @@index([leagueId, createdAt])
+}
