@@ -1,0 +1,15 @@
+school_name,conference,conference_title_odds,source,eligible_categories
+Georgia,SEC,300,FanDuel 2026-08-15,conference_champion
+Alabama,SEC,400,FanDuel 2026-08-15,conference_champion
+Texas,SEC,450,BetMGM 2026-08-15,conference_champion
+Ole Miss,SEC,1200,DraftKings 2026-08-15,conference_champion
+Ohio State,Big Ten,200,FanDuel 2026-08-15,conference_champion
+Penn State,Big Ten,400,DraftKings 2026-08-15,conference_champion
+Michigan,Big Ten,600,BetMGM 2026-08-15,conference_champion
+Oregon,Big Ten,700,FanDuel 2026-08-15,conference_champion
+Texas Tech,Big 12,350,FanDuel 2026-08-15,conference_champion
+Kansas State,Big 12,400,DraftKings 2026-08-15,conference_champion
+Oklahoma,Big 12,500,BetMGM 2026-08-15,conference_champion
+Miami,ACC,300,FanDuel 2026-08-15,conference_champion
+Clemson,ACC,400,DraftKings 2026-08-15,conference_champion
+Florida State,ACC,600,BetMGM 2026-08-15,conference_champion

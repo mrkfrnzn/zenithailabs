@@ -1,0 +1,9 @@
+school_name,conference,outcome
+Georgia,SEC,wins_conference_title_game
+Alabama,SEC,loses_conference_title_game
+Ohio State,Big Ten,wins_conference_title_game
+Penn State,Big Ten,loses_conference_title_game
+Texas Tech,Big 12,wins_conference_title_game
+Kansas State,Big 12,loses_conference_title_game
+Miami,ACC,wins_conference_title_game
+Clemson,ACC,loses_conference_title_game

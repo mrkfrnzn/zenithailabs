@@ -1,70 +1,158 @@
-# Getting Started with Create React App
+# CFB War Chest 2026
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+College Football Futures Showdown — Web Application MVP
 
-## Available Scripts
+A private, friends-and-family fantasy game played alongside the 2026 College Football season. Players draft a "War Chest" of athletes and schools before Week 1, then earn points through the regular season, conference championships, the Heisman Trophy, and the College Football Playoff.
 
-In the project directory, you can run:
+## Stack
 
-### `npm start`
+| Concern | Choice |
+|---|---|
+| Frontend | Next.js 14+ (App Router, TypeScript) |
+| Hosting | Vercel |
+| Database / Auth / Realtime | Supabase (Postgres + Auth + Realtime) |
+| Email | Resend |
+| UI | Tailwind CSS + Radix UI primitives |
+| Schema validation | Zod |
+| File parsing | papaparse (CSV) + SheetJS (XLSX) — server-side only |
+| Testing | Vitest (unit) + Playwright (E2E) |
+| Error monitoring | Sentry |
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Quick Start
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### 1. Install dependencies
 
-### `npm test`
+```bash
+npm install
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### 2. Environment variables
 
-### `npm run build`
+```bash
+cp .env.example .env.local
+# Fill in your Supabase, Resend, and Sentry credentials
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### 3. Database migrations
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+With the Supabase CLI installed:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+supabase db push
+# or for local dev:
+supabase start && supabase db reset
+```
 
-### `npm run eject`
+This runs `supabase/migrations/001_initial_schema.sql` (schema + RLS policies) and
+`supabase/migrations/002_seed_data.sql` (2025 archive + 2026 sample league).
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 4. Bootstrap admin
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+After deploying, create the first admin account:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```bash
+curl -X POST https://your-app.vercel.app/api/auth/bootstrap
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+This uses `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_NAME` from your env. Only works when no admin exists yet.
 
-## Learn More
+### 5. Run locally
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+npm run dev
+# App runs at http://localhost:3000
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 6. Run tests
 
-### Code Splitting
+```bash
+npm test               # Vitest unit tests (39 tests)
+npm run test:e2e       # Playwright E2E (requires running app)
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Project Structure
 
-### Analyzing the Bundle Size
+```
+src/
+  app/
+    login/        Magic-link login page
+    auth/         Auth callback handler
+    admin/        Admin dashboard + league management pages
+    leagues/      Player-facing league views, draft room, standings
+    api/          API routes (admin + player)
+  lib/
+    supabase/     Browser + server Supabase clients, middleware
+    scoring/      Scoring engine + standings builder
+    draft/        Snake draft order generator
+    import/       CSV/XLSX parser + fuzzy name matching
+    auth.ts       Session helpers (requireAdmin, requireLeagueMember)
+    audit.ts      Audit log writer
+    email.ts      Resend email helpers
+  types/          Canonical database types
+  __tests__/      Vitest unit tests
+e2e/              Playwright E2E tests
+supabase/
+  migrations/     001_initial_schema.sql, 002_seed_data.sql
+  config.toml     Local dev config
+samples/          Sample import CSVs (clean + malformed)
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Scoring Engine
 
-### Making a Progressive Web App
+All formulas are config-driven (stored in `scoring_configs` table, locked at draft start).
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+| Category | Formula |
+|---|---|
+| Heisman | `multiplier × (pick_odds / lowest_drafted_odds_in_category)` |
+| CFP | `multiplier × (pick_odds / lowest_drafted_odds_in_category)` |
+| Cinderella | Fixed points by final regular-season AP rank bucket |
+| Conference Champion | `multiplier × (pick_odds / lowest_drafted_odds_in_same_conference)` |
 
-### Advanced Configuration
+See `src/lib/scoring/engine.ts`. Idempotent — re-running against same inputs produces identical results.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## Draft System
 
-### Deployment
+- Snake order: odd rounds go 1→N, even rounds go N→1
+- Per-category exclusivity: a school drafted in CFP can still be drafted in Conference Champion
+- Realtime via Supabase Postgres CDC channels (< 2 second pick propagation)
+- Admin controls: start, pause, resume, undo, skip, override (all audit-logged with reason)
+- On-clock emails via Resend when it's a player's turn; 30-second warning email if timer enabled
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Page Routes
 
-### `npm run build` fails to minify
+| Path | Description |
+|---|---|
+| `/` | Redirects to `/leagues` or `/login` |
+| `/login` | Magic-link request form |
+| `/leagues` | Player's league list |
+| `/leagues/:id` | League home (on-clock banner, navigation) |
+| `/leagues/:id/draft` | Live draft room (realtime) |
+| `/leagues/:id/war-chest` | Own War Chest with scoring breakdown |
+| `/leagues/:id/draft-board` | Full draft board by round |
+| `/leagues/:id/standings` | Standings with milestone progress |
+| `/leagues/:id/trash-talk` | Realtime message board |
+| `/admin` | Admin dashboard |
+| `/admin/leagues/new` | Create league |
+| `/admin/leagues/:id` | League overview + invite players |
+| `/admin/leagues/:id/import` | Preseason data import |
+| `/admin/leagues/:id/draft-setup` | Categories, pick counts, scoring config |
+| `/admin/leagues/:id/draft-control` | Live draft controls |
+| `/admin/leagues/:id/results` | Upload results + publish scoring |
+| `/admin/leagues/:id/audit` | Audit log |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Seed Data
+
+Two leagues ship with the app:
+
+- **War Chest 2025 (Archive)** — read-only, real 2025 picks/scores  
+  (Darren Steadman 5,300 / Mike Wade 3,986.4 / Michael Steadman 2,200 / Mark Franzen 2,009.1)
+- **War Chest 2026 (Sample)** — status=setup, 6 fictional players for testing import and draft flows
+
+## Deployment
+
+1. Push to GitHub, connect to Vercel
+2. Set all env vars from `.env.example` in Vercel project settings  
+   Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `BOOTSTRAP_ADMIN_EMAIL`, `SENTRY_DSN`
+3. Run `supabase db push` against your production Supabase project
+4. Call `/api/auth/bootstrap` once to create the admin account
+5. Log in at `/login` → admin goes to `/admin`, players go to `/leagues`
