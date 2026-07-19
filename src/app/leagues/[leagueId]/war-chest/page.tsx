@@ -25,15 +25,21 @@ export default async function WarChestPage({
 
   const { data: league } = await supabase
     .from('leagues')
-    .select('name')
+    .select('name, settings_json')
     .eq('id', leagueId)
     .single()
 
-  // Group by category
-  const cats = ['heisman', 'cfp', 'cinderella', 'conference_champion'] as const
+  // Group by the season's configured categories (falls back to whatever the
+  // player actually has picks in).
+  const settings = (league?.settings_json ?? {}) as { draft_segment_order?: string[] }
+  const picksList = picks ?? []
+  const cats =
+    settings.draft_segment_order && settings.draft_segment_order.length > 0
+      ? settings.draft_segment_order
+      : Array.from(new Set(picksList.map((p: { category: string }) => p.category)))
   const byCategory = cats.map(cat => ({
     cat,
-    picks: (picks ?? []).filter((p: { category: string }) => p.category === cat),
+    picks: picksList.filter((p: { category: string }) => p.category === cat),
   }))
 
   const totalPoints = (picks ?? []).reduce((sum: number, p: { scores: Array<{ points: number; published: boolean }> }) => {

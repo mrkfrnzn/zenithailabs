@@ -4,7 +4,13 @@ export type UserRole = 'admin' | 'player'
 export type LeagueStatus = 'setup' | 'data_imported' | 'draft_ready' | 'drafting' | 'drafted' | 'scoring' | 'completed'
 export type InviteStatus = 'pending' | 'accepted'
 export type EntityType = 'athlete' | 'school'
-export type Category = 'heisman' | 'cfp' | 'cinderella' | 'conference_champion'
+export type Category =
+  | 'heisman'
+  | 'cfp'
+  | 'cinderella'
+  | 'conference_champion'
+  | 'most_improved'
+  | 'disaster_draft'
 export type DraftSegmentStatus = 'pending' | 'active' | 'completed'
 export type DraftStateStatus = 'not_started' | 'active' | 'paused' | 'completed'
 export type ResultImportStatus = 'pending' | 'reviewing' | 'approved' | 'published'
@@ -32,7 +38,9 @@ export interface League {
 export interface LeagueSettings {
   max_players: number
   conferences: string[]
-  pick_counts: Record<Category, number>
+  // Partial: a season only carries pick counts for its enabled categories
+  // (e.g. 2026 hides conference_champion, 2025 has no most_improved/disaster_draft).
+  pick_counts: Partial<Record<Category, number>>
   cinderella_ap_threshold: number
   draft_timer_enabled: boolean
   draft_timer_seconds: number
@@ -118,9 +126,31 @@ export interface ScoringConfig {
   updated_at: string
 }
 
+export type ScoringFormula =
+  | 'multiplier_odds_ratio' // Heisman, CFP Run, Conference Champion
+  | 'fixed_points' // Cinderella (rank bands)
+  | 'wins_over_baseline' // Most Improved
+  | 'inverted_record' // Disaster Draft
+
+export interface ScoringOutcome {
+  multiplier?: number
+  points?: number
+}
+
 export interface ScoringConfigData {
-  formula: 'multiplier_odds_ratio' | 'fixed_points'
-  outcomes: Record<string, { multiplier?: number; points?: number }>
+  formula: ScoringFormula
+  // Outcome buckets for multiplier_odds_ratio and fixed_points formulas.
+  outcomes?: Record<string, ScoringOutcome>
+  // wins_over_baseline (Most Improved): points per regular-season win above the
+  // locked preseason win total, clamped to [floor, cap].
+  points_per_win?: number
+  // inverted_record (Disaster Draft): losses add points, wins subtract points,
+  // and a winless season pays the winless_bonus. Clamped to [floor, cap].
+  points_per_loss?: number
+  winless_bonus?: number
+  // Shared clamps for the two record-based formulas. cap === null means uncapped.
+  floor?: number
+  cap?: number | null
 }
 
 export interface ResultImport {
@@ -167,6 +197,13 @@ export interface CalculationDetail {
   fixed_points: number | null
   formula: string
   points: number
+  // Record-based formulas (Most Improved / Disaster Draft) populate these so the
+  // pick-detail UI can show the full breakdown without recomputing.
+  regular_season_wins?: number | null
+  regular_season_losses?: number | null
+  preseason_win_total?: number | null
+  bonus?: number | null
+  clamped?: boolean
 }
 
 export interface TrashTalkPost {

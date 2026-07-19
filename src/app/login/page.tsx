@@ -1,10 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
+  // useSearchParams() must be read inside a Suspense boundary during prerender.
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')

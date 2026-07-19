@@ -4,9 +4,12 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { categoryLabel, categoryColor } from '@/lib/utils'
+import { categoryLabel } from '@/lib/utils'
+import type { Category } from '@/types'
 
-type Category = 'heisman' | 'cfp' | 'cinderella' | 'conference_champion'
+const IMPORT_CATEGORIES: Category[] = [
+  'heisman', 'cfp', 'cinderella', 'conference_champion', 'most_improved', 'disaster_draft',
+]
 type Flag = { row_index: number; field: string; type: string; message: string }
 
 export default function ImportPage() {
@@ -56,9 +59,11 @@ export default function ImportPage() {
           <h2 className="font-semibold mb-1">Required columns by category</h2>
           <div className="text-xs text-zinc-400 space-y-1">
             <div><strong>Heisman:</strong> athlete_name, school_name, position, odds, source</div>
-            <div><strong>CFP:</strong> school_name, conference, preseason_rank, national_title_odds, source</div>
+            <div><strong>CFP Run:</strong> school_name, conference, preseason_rank, national_title_odds, source</div>
             <div><strong>Cinderella:</strong> school_name, conference, source (preseason_ap_rank optional)</div>
             <div><strong>Conference Champion:</strong> school_name, conference, conference_title_odds, source</div>
+            <div><strong>Most Improved:</strong> school_name, conference, preseason_win_total, source</div>
+            <div><strong>Disaster Draft:</strong> school_name, conference, source <span className="text-zinc-500">(P4 + Notre Dame only)</span></div>
           </div>
           <p className="mt-3 text-xs text-zinc-500">Sample files available in <code>/samples</code></p>
         </div>
@@ -67,7 +72,7 @@ export default function ImportPage() {
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">Category</label>
             <div className="flex gap-2 flex-wrap">
-              {(['heisman', 'cfp', 'cinderella', 'conference_champion'] as Category[]).map(c => (
+              {IMPORT_CATEGORIES.map(c => (
                 <button
                   key={c}
                   type="button"

@@ -1,5 +1,5 @@
 /**
- * CFB War Chest Scoring Engine
+ * CFP War Chest Scoring Engine
  *
  * All formulas read from scoring_configs stored in the database.
  * The engine is deterministic / idempotent — same inputs always produce same outputs.
@@ -14,6 +14,11 @@ export interface PickInput {
   outcome: string | null
   // For conference_champion: conference of the school
   conference?: string | null
+  // For record-based categories (Most Improved / Disaster Draft): regular-season
+  // record and the locked preseason win total (Most Improved baseline).
+  regular_season_wins?: number | null
+  regular_season_losses?: number | null
+  preseason_win_total?: number | null
 }
 
 export interface ScoringContext {
@@ -23,6 +28,27 @@ export interface ScoringContext {
   allPicksOddsByConference: Record<string, number[]>
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+/** Clamp a raw score to [floor, cap]. cap == null/undefined means uncapped. */
+function clampScore(
+  raw: number,
+  floor: number | null | undefined,
+  cap: number | null | undefined
+): { value: number; clamped: boolean } {
+  let value = raw
+  let clamped = false
+  if (floor != null && value < floor) {
+    value = floor
+    clamped = true
+  }
+  if (cap != null && value > cap) {
+    value = cap
+    clamped = true
+  }
+  return { value, clamped }
+}
+
 export function calculateScore(
   pick: PickInput,
   config: ScoringConfigData,
@@ -30,6 +56,17 @@ export function calculateScore(
 ): CalculationDetail {
   const { category, locked_odds, outcome } = pick
 
+  // ── Record-based formulas ──────────────────────────────────────────────────
+  // These score from the regular-season record, not an outcome-bucket string, so
+  // they are handled before the generic "no outcome ⇒ 0" guard below.
+  if (config.formula === 'wins_over_baseline') {
+    return scoreWinsOverBaseline(pick, config)
+  }
+  if (config.formula === 'inverted_record') {
+    return scoreInvertedRecord(pick, config)
+  }
+
+  // ── Outcome-bucket formulas (Heisman / CFP / Cinderella / Conf. Champion) ────
   if (!outcome) {
     return {
       outcome: null,
@@ -42,7 +79,7 @@ export function calculateScore(
     }
   }
 
-  const outcomeConfig = config.outcomes[outcome]
+  const outcomeConfig = config.outcomes?.[outcome]
   if (!outcomeConfig) {
     return {
       outcome,
@@ -114,7 +151,84 @@ export function calculateScore(
     multiplier,
     fixed_points: null,
     formula: `${multiplier} × (${locked_odds} / ${lowest_drafted_odds})`,
-    points: Math.round(points * 10) / 10, // round to 1 decimal
+    points: round1(points),
+  }
+}
+
+// ── Most Improved: clamp((wins − baseline) × pointsPerWin, floor, cap) ────────
+function scoreWinsOverBaseline(pick: PickInput, config: ScoringConfigData): CalculationDetail {
+  const wins = pick.regular_season_wins
+  const baseline = pick.preseason_win_total
+  const pointsPerWin = config.points_per_win ?? 25
+  const floor = config.floor ?? 0
+  const cap = config.cap === undefined ? 250 : config.cap
+
+  const base: CalculationDetail = {
+    outcome: pick.outcome,
+    locked_odds: null,
+    lowest_drafted_odds: null,
+    multiplier: null,
+    fixed_points: null,
+    formula: 'wins_over_baseline',
+    points: 0,
+    regular_season_wins: wins ?? null,
+    preseason_win_total: baseline ?? null,
+  }
+
+  if (wins == null || baseline == null) {
+    return { ...base, formula: 'wins_over_baseline:no_data' }
+  }
+
+  const delta = wins - baseline
+  const raw = delta * pointsPerWin
+  const { value, clamped } = clampScore(raw, floor, cap)
+
+  return {
+    ...base,
+    formula: `clamp((${wins} − ${baseline}) × ${pointsPerWin}, ${floor}, ${cap ?? '∞'})`,
+    points: round1(value),
+    clamped,
+  }
+}
+
+// ── Disaster Draft: clamp(losses×pL + wins×pW + winlessBonus, floor, cap) ──────
+function scoreInvertedRecord(pick: PickInput, config: ScoringConfigData): CalculationDetail {
+  const wins = pick.regular_season_wins
+  const losses = pick.regular_season_losses
+  const pointsPerLoss = config.points_per_loss ?? 20
+  const pointsPerWin = config.points_per_win ?? -20
+  const winlessBonus = config.winless_bonus ?? 200
+  const floor = config.floor ?? 0
+  const cap = config.cap ?? null
+
+  const base: CalculationDetail = {
+    outcome: pick.outcome,
+    locked_odds: null,
+    lowest_drafted_odds: null,
+    multiplier: null,
+    fixed_points: null,
+    formula: 'inverted_record',
+    points: 0,
+    regular_season_wins: wins ?? null,
+    regular_season_losses: losses ?? null,
+  }
+
+  if (wins == null && losses == null) {
+    return { ...base, formula: 'inverted_record:no_data' }
+  }
+
+  const w = wins ?? 0
+  const l = losses ?? 0
+  const bonus = w === 0 ? winlessBonus : 0
+  const raw = l * pointsPerLoss + w * pointsPerWin + bonus
+  const { value, clamped } = clampScore(raw, floor, cap)
+
+  return {
+    ...base,
+    formula: `clamp(${l}×${pointsPerLoss} + ${w}×${pointsPerWin}${bonus ? ` + ${bonus} winless` : ''}, ${floor}, ${cap ?? '∞'})`,
+    points: round1(value),
+    bonus,
+    clamped,
   }
 }
 
@@ -155,6 +269,24 @@ export const DEFAULT_SCORING_CONFIGS: Record<Category, ScoringConfigData> = {
       loses_conference_title_game: { multiplier: 75 },
       fails_to_qualify: { multiplier: 0 },
     },
+  },
+  // Most Improved — 25 points per regular-season win above the locked preseason
+  // win total, clamped to [0, 250]. (GDD §6.4)
+  most_improved: {
+    formula: 'wins_over_baseline',
+    points_per_win: 25,
+    floor: 0,
+    cap: 250,
+  },
+  // Disaster Draft — losses help (+20), wins hurt (−20), a winless season pays a
+  // +200 "shoot the moon" bonus. Floor 0, uncapped. (GDD §6.5)
+  disaster_draft: {
+    formula: 'inverted_record',
+    points_per_loss: 20,
+    points_per_win: -20,
+    winless_bonus: 200,
+    floor: 0,
+    cap: null,
   },
 }
 

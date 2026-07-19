@@ -22,15 +22,27 @@ export async function POST(request: NextRequest) {
 
   const { name, season_year, max_players, conferences } = parsed.data
 
+  // Season-aware default category set. From 2026 the game reduces overlap by
+  // disabling Conference Champion and adding Most Improved + Disaster Draft
+  // (PRD §5 / GDD §15). Earlier seasons keep the legacy four categories so the
+  // 2025 archive stays reproducible.
+  const is2026Plus = season_year >= 2026
+  const pick_counts: Partial<Record<Category, number>> = is2026Plus
+    ? { heisman: 3, cfp: 4, cinderella: 4, most_improved: 2, disaster_draft: 2 }
+    : { heisman: 4, cfp: 4, cinderella: 4, conference_champion: 3 * conferences.length }
+  const draft_segment_order: Category[] = is2026Plus
+    ? ['heisman', 'cfp', 'cinderella', 'most_improved', 'disaster_draft']
+    : ['heisman', 'cfp', 'cinderella', 'conference_champion']
+
   const defaultSettings = {
     max_players,
     conferences,
-    pick_counts: { heisman: 4, cfp: 4, cinderella: 4, conference_champion: 3 * conferences.length },
+    pick_counts,
     cinderella_ap_threshold: 25,
     draft_timer_enabled: false,
     draft_timer_seconds: 90,
     draft_timer_on_expiry: 'pause',
-    draft_segment_order: ['heisman', 'cfp', 'cinderella', 'conference_champion'],
+    draft_segment_order,
     trash_talk_enabled: true,
     allow_provisional_visibility: false,
     is_archive: false,
@@ -55,9 +67,8 @@ export async function POST(request: NextRequest) {
     invite_status: 'accepted',
   })
 
-  // Seed default scoring configs
-  const categories: Category[] = ['heisman', 'cfp', 'cinderella', 'conference_champion']
-  const segmentOrder = defaultSettings.draft_segment_order as Category[]
+  // Seed scoring configs + draft segments for exactly this season's categories.
+  const categories: Category[] = draft_segment_order
 
   await supabase.from('scoring_configs').insert(
     categories.map(cat => ({
@@ -73,8 +84,8 @@ export async function POST(request: NextRequest) {
     categories.map(cat => ({
       league_id: league.id,
       category: cat,
-      segment_order: segmentOrder.indexOf(cat),
-      pick_count_per_player: defaultSettings.pick_counts[cat],
+      segment_order: draft_segment_order.indexOf(cat),
+      pick_count_per_player: pick_counts[cat] ?? 4,
       status: 'pending',
     }))
   )

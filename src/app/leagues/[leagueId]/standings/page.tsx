@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { requireLeagueMember } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { buildStandings, MemberInput, ScoredPickInput } from '@/lib/scoring/standings'
-import { Badge } from '@/components/ui/badge'
 import { categoryLabel, formatPoints } from '@/lib/utils'
 
 export default async function StandingsPage({
@@ -38,12 +37,18 @@ export default async function StandingsPage({
     ])
 
   const allScores = (scores ?? []) as Array<Record<string, unknown>>
-  const milestones = {
-    conference_champion: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'conference_champion'),
-    cinderella: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'cinderella'),
-    heisman: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'heisman'),
-    cfp: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'cfp'),
-  }
+
+  // Categories this season actually enabled drive both the milestone chips and
+  // the standings columns.
+  const settings = (league?.settings_json ?? {}) as { draft_segment_order?: string[] }
+  const cats = settings.draft_segment_order && settings.draft_segment_order.length > 0
+    ? settings.draft_segment_order
+    : ['heisman', 'cfp', 'cinderella', 'conference_champion']
+
+  const milestones = cats.map(cat => ({
+    cat,
+    done: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === cat),
+  }))
 
   const standings = buildStandings(
     (members ?? []) as MemberInput[],
@@ -65,7 +70,7 @@ export default async function StandingsPage({
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Milestone progress */}
         <div className="flex gap-3 flex-wrap mb-8">
-          {Object.entries(milestones).map(([cat, done]) => (
+          {milestones.map(({ cat, done }) => (
             <div key={cat} className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border ${done ? 'border-green-500/30 bg-green-500/10 text-green-400' : 'border-zinc-700 bg-zinc-800 text-zinc-500'}`}>
               {done ? '✓' : '○'} {categoryLabel(cat)}
             </div>
@@ -87,10 +92,9 @@ export default async function StandingsPage({
                   <th className="text-left px-4 py-3 font-medium w-8">#</th>
                   <th className="text-left px-4 py-3 font-medium">Player</th>
                   <th className="text-right px-4 py-3 font-medium">Total</th>
-                  <th className="text-right px-4 py-3 font-medium hidden sm:table-cell">Heisman</th>
-                  <th className="text-right px-4 py-3 font-medium hidden sm:table-cell">CFP</th>
-                  <th className="text-right px-4 py-3 font-medium hidden sm:table-cell">Cinderella</th>
-                  <th className="text-right px-4 py-3 font-medium hidden md:table-cell">Conf</th>
+                  {cats.map(cat => (
+                    <th key={cat} className="text-right px-4 py-3 font-medium hidden md:table-cell">{categoryLabel(cat)}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
@@ -102,10 +106,9 @@ export default async function StandingsPage({
                       {row.player_user_id === user.id && <span className="ml-2 text-xs text-amber-400">(you)</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-amber-400">{formatPoints(row.total_points)}</td>
-                    <td className="px-4 py-3 text-right text-zinc-300 hidden sm:table-cell">{formatPoints(row.heisman_points)}</td>
-                    <td className="px-4 py-3 text-right text-zinc-300 hidden sm:table-cell">{formatPoints(row.cfp_points)}</td>
-                    <td className="px-4 py-3 text-right text-zinc-300 hidden sm:table-cell">{formatPoints(row.cinderella_points)}</td>
-                    <td className="px-4 py-3 text-right text-zinc-300 hidden md:table-cell">{formatPoints(row.conference_champion_points)}</td>
+                    {cats.map(cat => (
+                      <td key={cat} className="px-4 py-3 text-right text-zinc-300 hidden md:table-cell">{formatPoints(row.category_points[cat] ?? 0)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

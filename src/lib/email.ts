@@ -1,6 +1,18 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazily construct the Resend client so importing this module never throws at
+// build time (page-data collection) when RESEND_API_KEY is absent. The key is
+// only required when an email is actually sent at runtime.
+let _resend: Resend | null = null
+function resendClient(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY)
+  return _resend
+}
+const resend = {
+  emails: {
+    send: (payload: Parameters<Resend['emails']['send']>[0]) => resendClient().emails.send(payload),
+  },
+}
 const FROM = process.env.EMAIL_FROM || 'CFB War Chest <noreply@cfbwarchest.com>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 

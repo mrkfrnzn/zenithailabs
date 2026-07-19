@@ -19,6 +19,11 @@ export interface StandingsRow {
   cfp_points: number
   cinderella_points: number
   conference_champion_points: number
+  most_improved_points: number
+  disaster_draft_points: number
+  // Generic per-category subtotal keyed by Category — lets the UI render columns
+  // for whatever categories a given season actually enabled.
+  category_points: Record<string, number>
   rank: number
   best_cinderella_rank: number | null
 }

@@ -35,12 +35,20 @@ export function parseXLSX(buffer: Buffer): ParsedRow[] {
   })
 }
 
+// Power 4 conferences — Disaster Draft eligibility is limited to these plus
+// Notre Dame (GDD §6.5 / PRD §6).
+export const P4_CONFERENCES = ['sec', 'big ten', 'big 12', 'acc']
+
 // ── Required columns per category ────────────────────────────────────────────
 export const REQUIRED_COLUMNS: Record<Category, string[]> = {
   heisman: ['athlete_name', 'school_name', 'position', 'odds', 'source'],
   cfp: ['school_name', 'conference', 'preseason_rank', 'national_title_odds', 'source'],
   cinderella: ['school_name', 'conference', 'source'],
   conference_champion: ['school_name', 'conference', 'conference_title_odds', 'source'],
+  // Most Improved — locked preseason regular-season win total is the baseline.
+  most_improved: ['school_name', 'conference', 'preseason_win_total', 'source'],
+  // Disaster Draft — P4 + Notre Dame only; no odds.
+  disaster_draft: ['school_name', 'conference', 'source'],
 }
 
 // Column aliases (alternate headers → canonical name)
@@ -57,6 +65,12 @@ const COLUMN_ALIASES: Record<string, string> = {
   ap_rank: 'preseason_ap_rank',
   preseason_ap_rank: 'preseason_ap_rank',
   conf: 'conference',
+  // Most Improved win-total header variants
+  win_total: 'preseason_win_total',
+  preseason_wins: 'preseason_win_total',
+  over_under: 'preseason_win_total',
+  ou_line: 'preseason_win_total',
+  vegas_win_total: 'preseason_win_total',
 }
 
 export function normalizeRow(row: ParsedRow): ParsedRow {
@@ -141,6 +155,34 @@ export function validateRows(
           field: 'preseason_ap_rank',
           type: 'eligibility_conflict',
           message: `Row ${i + 1}: school ranked #${rank} — not eligible for Cinderella by default (must start outside Top 25)`,
+        })
+      }
+    }
+
+    // Most Improved: baseline win total must be numeric
+    if (category === 'most_improved') {
+      const wt = row.preseason_win_total
+      if (wt != null && wt !== '' && typeof wt !== 'number') {
+        flags.push({
+          row_index: i,
+          field: 'preseason_win_total',
+          type: 'invalid_odds',
+          message: `Row ${i + 1}: preseason_win_total must be a number (e.g. 5.5)`,
+        })
+      }
+    }
+
+    // Disaster Draft: eligibility limited to P4 conferences + Notre Dame
+    if (category === 'disaster_draft') {
+      const conf = normalizeName(String(row.conference ?? ''))
+      const school = normalizeName(String(row.school_name ?? ''))
+      const isNotreDame = school === 'notre dame'
+      if (!isNotreDame && !P4_CONFERENCES.includes(conf)) {
+        flags.push({
+          row_index: i,
+          field: 'conference',
+          type: 'eligibility_conflict',
+          message: `Row ${i + 1}: "${row.conference ?? '—'}" is not P4 — Disaster Draft is limited to SEC, Big Ten, Big 12, ACC + Notre Dame`,
         })
       }
     }

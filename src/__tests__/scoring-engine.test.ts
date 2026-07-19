@@ -193,6 +193,102 @@ describe('calculateScore — Conference Champion', () => {
   })
 })
 
+describe('calculateScore — Most Improved (wins_over_baseline)', () => {
+  const config = DEFAULT_SCORING_CONFIGS.most_improved
+  const ctx = { allPicksOddsByCategory: {}, allPicksOddsByConference: {} }
+
+  it('scores wins above a half-win baseline proportionally', () => {
+    // (9 − 5.5) × 25 = 87.5  (GDD §6.4 worked example)
+    const result = calculateScore(
+      { draft_pick_id: 'p1', category: 'most_improved', locked_odds: null, outcome: null, regular_season_wins: 9, preseason_win_total: 5.5 },
+      config, ctx
+    )
+    expect(result.points).toBe(87.5)
+  })
+
+  it('floors at 0 when a team finishes below baseline', () => {
+    const result = calculateScore(
+      { draft_pick_id: 'p2', category: 'most_improved', locked_odds: null, outcome: null, regular_season_wins: 4, preseason_win_total: 6 },
+      config, ctx
+    )
+    expect(result.points).toBe(0)
+    expect(result.clamped).toBe(true)
+  })
+
+  it('caps at 250', () => {
+    // (20 − 5) × 25 = 375 → capped to 250
+    const result = calculateScore(
+      { draft_pick_id: 'p3', category: 'most_improved', locked_odds: null, outcome: null, regular_season_wins: 20, preseason_win_total: 5 },
+      config, ctx
+    )
+    expect(result.points).toBe(250)
+    expect(result.clamped).toBe(true)
+  })
+
+  it('scores 0 with no result data', () => {
+    const result = calculateScore(
+      { draft_pick_id: 'p4', category: 'most_improved', locked_odds: null, outcome: null, regular_season_wins: null, preseason_win_total: 6 },
+      config, ctx
+    )
+    expect(result.points).toBe(0)
+    expect(result.formula).toContain('no_data')
+  })
+})
+
+describe('calculateScore — Disaster Draft (inverted_record)', () => {
+  const config = DEFAULT_SCORING_CONFIGS.disaster_draft
+  const ctx = { allPicksOddsByCategory: {}, allPicksOddsByConference: {} }
+
+  it('rewards a winless season with the shoot-the-moon bonus', () => {
+    // 12×20 + 0×(−20) + 200 = 440  (GDD §6.5 worked example)
+    const result = calculateScore(
+      { draft_pick_id: 'p1', category: 'disaster_draft', locked_odds: null, outcome: null, regular_season_wins: 0, regular_season_losses: 12 },
+      config, ctx
+    )
+    expect(result.points).toBe(440)
+    expect(result.bonus).toBe(200)
+  })
+
+  it('nets losses against wins for a 2-10 team', () => {
+    // 10×20 + 2×(−20) = 160
+    const result = calculateScore(
+      { draft_pick_id: 'p2', category: 'disaster_draft', locked_odds: null, outcome: null, regular_season_wins: 2, regular_season_losses: 10 },
+      config, ctx
+    )
+    expect(result.points).toBe(160)
+    expect(result.bonus).toBe(0)
+  })
+
+  it('floors at 0 for a .500 team', () => {
+    // 6×20 + 6×(−20) = 0
+    const result = calculateScore(
+      { draft_pick_id: 'p3', category: 'disaster_draft', locked_odds: null, outcome: null, regular_season_wins: 6, regular_season_losses: 6 },
+      config, ctx
+    )
+    expect(result.points).toBe(0)
+  })
+
+  it('floors at 0 for a winning team (would be negative)', () => {
+    // 4×20 + 8×(−20) = −80 → floor 0
+    const result = calculateScore(
+      { draft_pick_id: 'p4', category: 'disaster_draft', locked_odds: null, outcome: null, regular_season_wins: 8, regular_season_losses: 4 },
+      config, ctx
+    )
+    expect(result.points).toBe(0)
+    expect(result.clamped).toBe(true)
+  })
+
+  it('does not pay the winless bonus once a team wins a game', () => {
+    // 11×20 + 1×(−20) = 200, no bonus
+    const result = calculateScore(
+      { draft_pick_id: 'p5', category: 'disaster_draft', locked_odds: null, outcome: null, regular_season_wins: 1, regular_season_losses: 11 },
+      config, ctx
+    )
+    expect(result.points).toBe(200)
+    expect(result.bonus).toBe(0)
+  })
+})
+
 describe('scoring engine idempotency', () => {
   const config = DEFAULT_SCORING_CONFIGS.heisman
   const context = {

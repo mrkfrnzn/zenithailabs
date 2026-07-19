@@ -55,12 +55,17 @@ export async function GET(
     .select('result_type, status')
     .eq('league_id', leagueId)
 
-  const milestones = {
-    conference_champion: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'conference_champion' && i.status === 'published'),
-    cinderella: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'cinderella' && i.status === 'published'),
-    heisman: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'heisman' && i.status === 'published'),
-    cfp: (publishedImports ?? []).some((i: Record<string, unknown>) => i.result_type === 'cfp' && i.status === 'published'),
+  const settings = (league?.settings_json ?? {}) as { draft_segment_order?: string[] }
+  const cats = settings.draft_segment_order && settings.draft_segment_order.length > 0
+    ? settings.draft_segment_order
+    : ['heisman', 'cfp', 'cinderella', 'conference_champion']
+
+  const milestones: Record<string, boolean> = {}
+  for (const cat of cats) {
+    milestones[cat] = (publishedImports ?? []).some(
+      (i: Record<string, unknown>) => i.result_type === cat && i.status === 'published'
+    )
   }
 
-  return NextResponse.json({ standings, milestones, as_of: new Date().toISOString() })
+  return NextResponse.json({ standings, milestones, categories: cats, as_of: new Date().toISOString() })
 }

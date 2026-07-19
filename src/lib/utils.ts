@@ -17,19 +17,25 @@ export function formatPoints(points: number): string {
 export function categoryLabel(cat: string): string {
   const labels: Record<string, string> = {
     heisman: 'Heisman',
-    cfp: 'CFP',
+    cfp: 'CFP Run',
     cinderella: 'Cinderella',
     conference_champion: 'Conf. Champion',
+    most_improved: 'Most Improved',
+    disaster_draft: 'Disaster Draft',
   }
   return labels[cat] ?? cat
 }
 
-export function categoryColor(cat: string): 'amber' | 'blue' | 'purple' | 'green' {
-  const colors: Record<string, 'amber' | 'blue' | 'purple' | 'green'> = {
+export type CategoryColor = 'amber' | 'blue' | 'purple' | 'green' | 'orange' | 'red'
+
+export function categoryColor(cat: string): CategoryColor {
+  const colors: Record<string, CategoryColor> = {
     heisman: 'amber',
     cfp: 'blue',
     cinderella: 'purple',
     conference_champion: 'green',
+    most_improved: 'orange',
+    disaster_draft: 'red',
   }
   return colors[cat] ?? 'amber'
 }

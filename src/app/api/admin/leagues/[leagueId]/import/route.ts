@@ -37,7 +37,9 @@ export async function POST(
     return NextResponse.json({ error: 'file and category are required' }, { status: 400 })
   }
 
-  const validCategories: Category[] = ['heisman', 'cfp', 'cinderella', 'conference_champion']
+  const validCategories: Category[] = [
+    'heisman', 'cfp', 'cinderella', 'conference_champion', 'most_improved', 'disaster_draft',
+  ]
   if (!validCategories.includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
   }
@@ -84,6 +86,11 @@ export async function POST(
       category === 'cfp' ? row.national_title_odds :
       category === 'conference_champion' ? row.conference_title_odds : null
 
+    // Most Improved carries a locked preseason win total (its scoring baseline).
+    const preseasonWinTotal = category === 'most_improved' && typeof row.preseason_win_total === 'number'
+      ? row.preseason_win_total
+      : null
+
     return {
       league_id: leagueId,
       entity_type: category === 'heisman' ? 'athlete' : 'school',
@@ -93,6 +100,7 @@ export async function POST(
       position: row.position ? String(row.position) : null,
       preseason_rank: typeof row.preseason_rank === 'number' ? row.preseason_rank :
         typeof row.preseason_ap_rank === 'number' ? row.preseason_ap_rank : null,
+      preseason_win_total: preseasonWinTotal,
       odds: typeof odds === 'number' ? odds : null,
       odds_source: row.source ? String(row.source) : null,
       eligible_categories_json: eligibleCategories,

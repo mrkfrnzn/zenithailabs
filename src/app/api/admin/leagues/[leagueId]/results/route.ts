@@ -58,12 +58,25 @@ export async function POST(
 
     if (!picks || !scoringConfig) return NextResponse.json({ error: 'Missing picks or config' }, { status: 500 })
 
-    // Build outcome map: entity_id → outcome
-    const outcomeMap: Record<string, string> = {}
-    for (const row of resultRows) {
-      if (row.matched_entity_id && row.outcome) {
-        outcomeMap[row.matched_entity_id] = row.outcome
+    // Build result map: entity_id → { outcome, raw row }. The raw row carries the
+    // regular-season record needed by the record-based categories.
+    const resultByEntity: Record<string, { outcome: string | null; raw: Record<string, unknown> }> = {}
+    for (const row of resultRows as Array<{
+      matched_entity_id: string | null
+      outcome: string | null
+      raw_row_json: Record<string, unknown> | null
+    }>) {
+      if (row.matched_entity_id) {
+        resultByEntity[row.matched_entity_id] = {
+          outcome: row.outcome ?? null,
+          raw: row.raw_row_json ?? {},
+        }
       }
+    }
+    const num = (v: unknown): number | null => {
+      if (v == null || v === '') return null
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
     }
 
     // Build context for scoring: all picks' odds
@@ -87,16 +100,36 @@ export async function POST(
     // Calculate and upsert scores
     const scoreRows = picks.map((pick: {
       id: string
-      draftable_entities: { id: string; odds: number | null; conference: string | null }
+      draftable_entities: { id: string; odds: number | null; conference: string | null; preseason_win_total: number | null }
       category: Category
       locked_odds: number | null
     }) => {
-      const outcome = outcomeMap[pick.draftable_entities.id] ?? null
+      const entity = pick.draftable_entities
+      const res = resultByEntity[entity.id]
+      const outcome = res?.outcome ?? null
+      const raw = res?.raw ?? {}
 
-      // Cinderella: convert rank to outcome
+      // Resolve the outcome / record inputs per category.
       let resolvedOutcome = outcome
+      let regularSeasonWins: number | null = null
+      let regularSeasonLosses: number | null = null
+      let preseasonWinTotal: number | null = null
+
       if (category === 'cinderella' && outcome && /^\d+$/.test(outcome)) {
+        // Cinderella: convert final AP rank to a bucket.
         resolvedOutcome = cinderellaRankToOutcome(parseInt(outcome))
+      } else if (category === 'most_improved') {
+        regularSeasonWins = num(raw.actual_wins ?? raw.wins ?? raw.regular_season_wins)
+        preseasonWinTotal = entity.preseason_win_total ?? null
+        resolvedOutcome = regularSeasonWins != null && preseasonWinTotal != null
+          ? `${regularSeasonWins} wins (line ${preseasonWinTotal})`
+          : null
+      } else if (category === 'disaster_draft') {
+        regularSeasonWins = num(raw.wins ?? raw.regular_season_wins ?? raw.actual_wins)
+        regularSeasonLosses = num(raw.losses ?? raw.regular_season_losses)
+        resolvedOutcome = regularSeasonWins != null || regularSeasonLosses != null
+          ? `${regularSeasonWins ?? '?'}-${regularSeasonLosses ?? '?'}`
+          : null
       }
 
       const calculation = calculateScore(
@@ -105,7 +138,10 @@ export async function POST(
           category,
           locked_odds: pick.locked_odds,
           outcome: resolvedOutcome,
-          conference: pick.draftable_entities.conference,
+          conference: entity.conference,
+          regular_season_wins: regularSeasonWins,
+          regular_season_losses: regularSeasonLosses,
+          preseason_win_total: preseasonWinTotal,
         },
         config,
         {

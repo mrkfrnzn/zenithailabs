@@ -211,7 +211,9 @@ export default function DraftRoomPage() {
                   className="bg-zinc-800 border border-zinc-700 text-sm rounded-lg px-3 py-2"
                 >
                   <option value="all">All Categories</option>
-                  {(['heisman', 'cfp', 'cinderella', 'conference_champion'] as Category[]).map(c => (
+                  {Array.from(
+                    new Set((data?.entities ?? []).flatMap(e => e.eligible_categories_json))
+                  ).map(c => (
                     <option key={c} value={c}>{categoryLabel(c)}</option>
                   ))}
                 </select>

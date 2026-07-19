@@ -72,3 +72,44 @@ describe('validateRows — cinderella', () => {
     expect(flags.some(f => f.type === 'eligibility_conflict')).toBe(false)
   })
 })
+
+describe('validateRows — most_improved', () => {
+  const validRow = { school_name: 'Oklahoma State', conference: 'Big 12', preseason_win_total: 5.5, source: 'DraftKings' }
+
+  it('passes a valid row', () => {
+    const flags = validateRows([validRow], 'most_improved')
+    expect(flags).toHaveLength(0)
+  })
+
+  it('flags a missing preseason_win_total column', () => {
+    const row = { school_name: 'Oklahoma State', conference: 'Big 12', source: 'DraftKings' }
+    const flags = validateRows([row], 'most_improved')
+    expect(flags.some(f => f.type === 'missing_column' && f.field === 'preseason_win_total')).toBe(true)
+  })
+
+  it('flags a non-numeric win total', () => {
+    const row = { ...validRow, preseason_win_total: 'six' as unknown as number }
+    const flags = validateRows([row], 'most_improved')
+    expect(flags.some(f => f.field === 'preseason_win_total' && f.type === 'invalid_odds')).toBe(true)
+  })
+})
+
+describe('validateRows — disaster_draft', () => {
+  it('passes a P4 school', () => {
+    const row = { school_name: 'Mississippi State', conference: 'SEC', source: 'internal' }
+    const flags = validateRows([row], 'disaster_draft')
+    expect(flags.some(f => f.type === 'eligibility_conflict')).toBe(false)
+  })
+
+  it('passes Notre Dame regardless of conference label', () => {
+    const row = { school_name: 'Notre Dame', conference: 'Independent', source: 'internal' }
+    const flags = validateRows([row], 'disaster_draft')
+    expect(flags.some(f => f.type === 'eligibility_conflict')).toBe(false)
+  })
+
+  it('flags a non-P4 school as an eligibility conflict', () => {
+    const row = { school_name: 'New Mexico State', conference: 'Conference USA', source: 'internal' }
+    const flags = validateRows([row], 'disaster_draft')
+    expect(flags.some(f => f.type === 'eligibility_conflict')).toBe(true)
+  })
+})

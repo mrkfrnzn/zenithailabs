@@ -43,8 +43,10 @@ supabase db push
 supabase start && supabase db reset
 ```
 
-This runs `supabase/migrations/001_initial_schema.sql` (schema + RLS policies) and
-`supabase/migrations/002_seed_data.sql` (2025 archive + 2026 sample league).
+This runs `supabase/migrations/001_initial_schema.sql` (schema + RLS policies),
+`supabase/migrations/002_seed_data.sql` (2025 archive + 2026 sample league), and
+`supabase/migrations/003_add_new_categories.sql` (Most Improved + Disaster Draft
+categories, widened constraints, and the `preseason_win_total` column).
 
 ### 4. Bootstrap admin
 
@@ -104,9 +106,13 @@ All formulas are config-driven (stored in `scoring_configs` table, locked at dra
 | Category | Formula |
 |---|---|
 | Heisman | `multiplier × (pick_odds / lowest_drafted_odds_in_category)` |
-| CFP | `multiplier × (pick_odds / lowest_drafted_odds_in_category)` |
+| CFP Run | `multiplier × (pick_odds / lowest_drafted_odds_in_category)` |
 | Cinderella | Fixed points by final regular-season AP rank bucket |
-| Conference Champion | `multiplier × (pick_odds / lowest_drafted_odds_in_same_conference)` |
+| Conference Champion | `multiplier × (pick_odds / lowest_drafted_odds_in_same_conference)` *(2026: disabled by default, retained for 2025 archive)* |
+| Most Improved | `clamp((regular_season_wins − preseason_win_total) × points_per_win, floor, cap)` — default 25 pts/win, floor 0, cap 250 |
+| Disaster Draft | `clamp(losses × 20 + wins × −20 + winless_bonus, floor, cap)` — losses help, wins hurt, winless pays +200 |
+
+From 2026, new leagues default to **Heisman, CFP Run, Cinderella, Most Improved, Disaster Draft** (Conference Champion disabled). Point values, multipliers, bonuses, caps, floors, and picks-per-player are editable per category at `/admin/leagues/:id/draft-setup` until the draft locks.
 
 See `src/lib/scoring/engine.ts`. Idempotent — re-running against same inputs produces identical results.
 
