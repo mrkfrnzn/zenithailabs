@@ -8,7 +8,7 @@ A private, friends-and-family fantasy game played alongside the 2026 College Foo
 
 | Concern | Choice |
 |---|---|
-| Frontend | Next.js 14+ (App Router, TypeScript) |
+| Frontend | Next.js 16 (App Router, TypeScript) |
 | Hosting | Vercel |
 | Database / Auth / Realtime | Supabase (Postgres + Auth + Realtime) |
 | Email | Resend |
@@ -158,7 +158,7 @@ Two leagues ship with the app:
 
 1. Push to GitHub, connect to Vercel
 2. Set all env vars from `.env.example` in Vercel project settings  
-   Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `BOOTSTRAP_ADMIN_EMAIL`, `SENTRY_DSN`
+   Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `BOOTSTRAP_ADMIN_EMAIL` (also set `NEXT_PUBLIC_APP_URL` to your production URL so email links resolve)
 3. Run `supabase db push` against your production Supabase project
 4. Call `/api/auth/bootstrap` once to create the admin account
 5. Log in at `/login` → admin goes to `/admin`, players go to `/leagues`
