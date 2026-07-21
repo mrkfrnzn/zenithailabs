@@ -41,7 +41,7 @@ as your starting point.
 
 | Variable | Status |
 | --- | --- |
-| `SENTRY_DSN` | `@sentry/nextjs` (`^10.53.1`) is installed but **not wired up** — no `process.env.SENTRY_DSN` read exists anywhere in `src/`. Setting it currently has **no effect**. (Note: `README.md` lists it as "required" — that is aspirational; the code does not read it.) |
+| `SENTRY_DSN` | `@sentry/nextjs` (`^10.53.1`) is installed but **not wired up** — no `process.env.SENTRY_DSN` read exists anywhere in `src/`. Setting it currently has **no effect**, so it is not a required deploy variable. (Wire up Sentry first — see `TECH_DEBT.md` item 5 — before this becomes meaningful.) |
 | `PLAYWRIGHT_BASE_URL` | E2E test tooling only — do **not** set in Vercel |
 
 Minimum set to boot the app: `NEXT_PUBLIC_SUPABASE_URL`,

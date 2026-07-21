@@ -38,8 +38,8 @@ The root [`README.md`](../README.md) has a product-level overview, scoring formu
 | Fuzzy name matching | fuse.js |
 | Testing | Vitest (unit) + Playwright (E2E) |
 
-> Note: the root README lists "Next.js 14+"; the codebase is on Next.js 16.2.6. Follow the version-specific
-> guides under `node_modules/next/dist/docs/` before writing framework code — several conventions differ.
+> Note: this codebase is on Next.js 16.2.6. Follow the version-specific guides under
+> `node_modules/next/dist/docs/` before writing framework code — several conventions differ from older Next.js.
 
 ---
 
