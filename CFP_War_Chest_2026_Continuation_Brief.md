@@ -1,96 +1,83 @@
 # CFP War Chest 2026 — Continuation Brief
-*Last updated: 2026-07-20 · Author: Mark Franzen + Claude*
-*Reason for handoff: 2026-category workstream complete and pushed; PR open and being watched. Documenting so a fresh session can pick up review follow-through or the next feature.*
+*Last updated: 2026-07-24 (v2 — deployment session) · Author: Mark Franzen + Claude*
+*Reason for handoff: app is deployed to Vercel and loading; database setup + admin bootstrap are the remaining blockers, and the agent sandbox cannot perform them. Documenting so a fresh session can finish the go-live.*
 
 ---
 
 ## Read This First
 
-1. **The 2026 update is committed, pushed, and in an open PR (#3).** Work lives on branch `claude/cfb-futures-mvp-ju2Cw` in repo `mrkfrnzn/zenithailabs`. PR: https://github.com/mrkfrnzn/zenithailabs/pull/3 (base `main`).
-2. **Category names corrected mid-session.** Mike Wade's original chat screenshot called them "Greatest Improvement" and "Hearts/Dumpster Fire." The official uploaded docs renamed them to **Most Improved** (key `most_improved`) and **Disaster Draft** (key `disaster_draft`). The scoring formulas also differ from the first informal guess — use the doc formulas below, not the screenshot's.
-3. **Migration 003 must be applied to Supabase (`supabase db push`) before the new categories can be drafted** — it widens category CHECK constraints and adds a column. Until it runs, inserts with `most_improved`/`disaster_draft` are rejected by Postgres.
-4. **This app is NOT a normal Next.js.** `AGENTS.md` warns the local Next.js has breaking API changes; consult `node_modules/next/dist/docs/` before writing framework code. (Build runs on Next.js 16.2.6 / Turbopack.)
+1. **The app is LIVE on Vercel: https://zenithailabs.vercel.app** — the login page loads correctly on the user's iPad (verified by screenshot). Build succeeded, environment variables are wired.
+2. **Two blockers remain before the user can log in and test:** (a) the Supabase **migrations 001–003 have NOT been run** yet, and (b) the **first admin has NOT been bootstrapped**. Until both are done, the DB tables don't exist and there's no account to log in with.
+3. **CRITICAL — the agent CANNOT reach Supabase or Vercel from this sandbox.** The agent proxy returns a hard **403 policy denial** for `supabase.co` and `vercel.app` (confirmed via `$HTTPS_PROXY/__agentproxy/status`), and no Supabase MCP connector is attached. So the agent **cannot run the migrations or fire the bootstrap POST itself.** These must be done by the user, OR by enabling the Supabase connector (whose tools run server-side, bypassing the sandbox block). Do not promise to "just do it" from the container — you can't.
+4. **Never ask the user to paste secret keys into chat.** The real Supabase publishable/secret keys live only in the user's Vercel env vars and the local gitignored `.env.local`. They are NOT in the repo or chat.
+5. **This is NOT standard Next.js** — `AGENTS.md` warns the local Next.js (16.2.6) has breaking changes; consult `node_modules/next/dist/docs/` before writing framework code.
 
 ## Context — What This Is
 
-CFP War Chest is a private, season-long college-football futures draft game for a small friend group (3–6 players, commissioner-run). Players draft athletes/teams before Week 1 and earn points as outcomes resolve (Heisman, CFP, conference titles, etc.). The app is a Next.js App Router + Supabase (Postgres/Auth/Realtime) + Resend build, deployed on Vercel. An MVP with four scoring categories already existed; this session implemented the **2026 season update** defined by three uploaded documents (PRD, GDD, TDD): reduce category overlap, add two counter-cyclical categories, and make scoring commissioner-configurable rather than hard-coded.
+CFP War Chest is a private, season-long college-football futures draft game (3–6 players, commissioner-run). Stack: **Next.js 16.2.6 (App Router, Turbopack)** on **Vercel**; **Supabase** (Postgres + magic-link Auth + Realtime); **Resend** email; Tailwind + Radix. The 2026 season update (new categories + configurable scoring + admin config page) was built and merged earlier. This session focused on **deploying the app to a working Vercel URL the user can open and test on an iPad tonight.**
 
 ## What We Accomplished This Session
 
-**Design docs reconciled.** Read the three uploaded Word docs (PRD/GDD/TDD) and built a styled 3-tab HTML artifact rendering all three (published as a claude.ai artifact; source file at `/tmp/claude-0/.../scratchpad/design-docs.html`).
-
-**Two new scoring categories implemented end-to-end** (commit `1019ede`):
-- **Most Improved** (`most_improved`) — formula `wins_over_baseline`: `clamp((regular_season_wins − preseason_win_total) × 25, floor 0, cap 250)`. Regular season only. Any FBS school eligible.
-- **Disaster Draft** (`disaster_draft`) — formula `inverted_record`: `clamp(losses × 20 + wins × −20 + winless_bonus, floor 0, uncapped)`. Winless season pays a +200 "shoot the moon" bonus. Pool restricted to P4 + Notre Dame (enforced at import).
-
-**Season-configurable categories.** New leagues from season_year ≥ 2026 default to Heisman, CFP Run, Cinderella, Most Improved, Disaster Draft — **Conference Champion disabled** (kept for the 2025 archive). Earlier seasons keep the legacy four. Category lists across UI are now derived from the league's `settings_json.draft_segment_order`, not hard-coded.
-
-**Admin scoring configuration page** (the user's explicit ask): new `/admin/leagues/[id]/draft-setup` page + `ScoringEditor.tsx` client component, backed by new `PATCH /api/admin/leagues/[id]/scoring` route. Lets the commissioner edit multipliers, point values, bonuses, caps, floors, and picks-per-player per category. Audit-logged; locks once the draft starts; never overwrites a locked config.
-
-**Supporting changes:** engine formulas + defaults, standings builder (added generic `category_points` map + named fields), import parser (required columns, P4 eligibility, win-total validation + aliases), import/results routes (store `preseason_win_total`, thread wins/losses/baseline into scoring), utils labels/colors (CFP → "CFP Run"; orange/red for new cats), Badge `orange` variant, migration `003_add_new_categories.sql`, 4 sample CSVs, README updates.
-
-**Two pre-existing build blockers fixed** (discovered during `next build` verification, unrelated to the feature): `email.ts` eagerly constructed the Resend client at import (now lazy); `/login` used `useSearchParams()` without a Suspense boundary (now wrapped).
-
-**Verification:** `tsc --noEmit` clean; **54 unit tests pass** (was 39; +15 new for both formulas and import validation); `next build` green. My authored files are lint-clean.
-
-**Shipped:** committed as `1019ede`, pushed, opened PR #3, subscribed to PR activity for autofix/review-response.
+- **Deployed to Vercel.** Imported `mrkfrnzn/zenithailabs` (production branch `main`) into a Hobby-plan Vercel project named **`zenithailabs`**. First deploy was canceled; a clean redeploy after env vars succeeded → **Ready**. Live at **https://zenithailabs.vercel.app**; login page confirmed loading on iPad.
+- **Set all 6 environment variables in Vercel** (Production/Preview/Development): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the `sb_publishable_…` key), `SUPABASE_SERVICE_ROLE_KEY` (the `sb_secret_…` key), `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL=https://zenithailabs.vercel.app`, `BOOTSTRAP_ADMIN_EMAIL`.
+- **Created `.env.example`** (placeholders only) + `.gitignore` `!.env.example` exception; and **generated `docs/`** (7 developer docs). Both shipped via **PR #4 (merged)**.
+- **Created `scripts/setup-database.sql`** — migrations 001+002+003 concatenated into ONE file so the user can paste it once into the Supabase SQL Editor (iPad has no CLI). On branch `claude/cfb-futures-mvp-ju2Cw`, commit `4236e90`. Copy link: `github.com/mrkfrnzn/zenithailabs/blob/claude/cfb-futures-mvp-ju2Cw/scripts/setup-database.sql`.
+- **Verified deployment readiness** (earlier workflow audit): no build blockers; secrets confirmed NOT committed (triple-verified); env vars enumerated; migration order documented.
 
 ## Decisions Locked (do not relitigate)
 
-- **Category keys are `most_improved` and `disaster_draft`.** CFP keeps its existing key `cfp` (display label changed to "CFP Run") to preserve 2025 archive reproducibility. (From the uploaded PRD/GDD, which are the source of truth.)
-- **Scoring formulas & defaults** as specified above (Most Improved 25 pts/win, floor 0, cap 250; Disaster Draft +20/loss, −20/win, +200 winless, floor 0, uncapped). These come straight from GDD §6.4–6.5.
-- **Conference Champion is disabled for 2026, retained for 2025** — implemented at league-creation time (not seeded for 2026 leagues). Not deleted.
-- **Commissioner wants an admin page to edit points/scoring** — built as `/admin/leagues/[id]/draft-setup`. (User confirmed: "Yes, I do want to have an admin configuration page where I can edit the points and scoring.")
-- **Open a PR and watch it** — done (PR #3, subscribed).
+- **Supabase project:** ref `wxajnfxwqwlinxohrtbc`, URL `https://wxajnfxwqwlinxohrtbc.supabase.co`. Uses the **new Supabase key format** (`sb_publishable_…` = anon, `sb_secret_…` = service_role). (User provided these.)
+- **Vercel project = `zenithailabs`, production branch = `main`, URL = `https://zenithailabs.vercel.app`.** All 6 env vars are set there. (Done this session.)
+- **Migrations are run by the user via the Supabase SQL Editor** (or via the connector), not by the agent — the sandbox is network-blocked. (Established this session.)
+- **Do not modify application code** unless a confirmed deploy/test blocker requires it. (User instruction, repeated.)
+- **PRs #3 (2026 categories) and #4 (docs + .env.example) are MERGED to `main`.** Do not reopen.
 
 ## Open Items / What's Next
 
-**Immediate**
-- **Apply migration 003** to the Supabase project (`supabase db push`) before anyone drafts the new categories. Not yet run against any live DB in this session.
-- **Watch PR #3.** Currently: no CI configured in the repo (0 GitHub Actions workflows), no review comments. Subscription is active and will wake a session on review comments/reviews. Webhooks do NOT deliver new pushes, CI-success, or merge-conflict transitions.
+**Immediate (the go-live path, in order):**
+1. **User runs the migrations** — open the `scripts/setup-database.sql` GitHub file → **Copy raw file** → Supabase Dashboard → SQL Editor → New query → paste → **Run**. Expect "Success. No rows returned." (Agent cannot do this.) If the seed block (002) errors on an `auth.users` insert, the required parts (001 schema + 003 constraints/column) are what matter — 002 is only sample data.
+2. **Bootstrap the first admin** — needs a POST to `https://zenithailabs.vercel.app/api/auth/bootstrap` (reads `BOOTSTRAP_ADMIN_EMAIL`, creates the admin, returns 409 if one already exists). The agent CANNOT send this (proxy-blocked). **Bootstrap options were presented but the user interrupted before choosing — this is OPEN:**
+   - (a) iPad **Shortcuts app** → "Get Contents of URL", Method POST, that URL. No code change.
+   - (b) A **temporary GET-triggerable bootstrap** (small reversible code change + redeploy) so it's a one-tap Safari link; revert after. Needs user OK (touches code).
+   - (c) **Enable the Supabase connector**, then the agent creates the admin rows directly via SQL (replicating `src/app/api/auth/bootstrap/route.ts`), bypassing the blocked HTTP endpoint.
+3. **Configure Supabase Auth URLs (likely required for login to work).** Supabase → Authentication → URL Configuration → set **Site URL** and **Redirect URLs** to include `https://zenithailabs.vercel.app` and `https://zenithailabs.vercel.app/auth/callback`. The repo's `supabase/config.toml` defaults `site_url` to `127.0.0.1:3000`, so without this the magic-link email will redirect to localhost and login will fail on the iPad. **Flag this proactively — it's an easy-to-miss blocker.**
+4. **Smoke test (user's requested checklist, not yet delivered):** login (magic link) → `/admin` loads → create/import a league → draft room → standings → results. Note the sample data (2025 archive + 2026 sample leagues) only exists if migration 002 ran.
 
-**Near-term**
-- **Merge-conflict risk:** PRs #1 and #2 (unrelated apps — an NFL survivor league and a *different* Prisma/SQLite CFB implementation) are also open against `main`. If either merges first, PR #3 may develop silent conflicts (webhook won't announce it). If so, rebase `claude/cfb-futures-mvp-ju2Cw` onto latest `main`.
-- Note: `main` does not yet contain this branch's earlier MVP commit (`6d775f9`), so PR #3's diff spans the full Supabase-based build + the 2026 update.
+**Near-term:**
+- If the user wants the agent to handle Supabase directly going forward, **enabling the Supabase connector** is the path (its tools run server-side, not through the blocked sandbox).
+- `scripts/setup-database.sql` sits on branch `claude/cfb-futures-mvp-ju2Cw` (1 commit ahead of `main`); no PR opened for it. Open one only if the user wants it on `main`.
 
-**Strategic (proposed, NOT decided)**
-- **Commissioner UI toggle to enable/disable categories per league.** Floated as a follow-up; user has not committed. Currently category on/off is decided at league creation by season year. Would require mutating `draft_segment_order` + `pick_counts` + `scoring_configs` + `draft_segments` rows together.
-- Other known MVP gaps carried from before this session (not touched here): missing admin `results` upload UI and `standings-review` pages, broken invite form pattern in `/admin/leagues/[id]/page.tsx` (server action calling internal API), draft-timer background job, Sentry not initialized. These predate the 2026 work; confirm scope with the user before acting.
-- TDD describes heavier architecture (immutable baseline snapshots, `ScoreCalculationRun`, `TeamGameResult` game-classification enum) that was intentionally NOT built — the pragmatic mapping onto the existing `scoring_configs` JSON + CSV-import model was chosen per the TDD's own "smallest compatible plan" instruction. Revisit only if the group wants full versioned recalculation history.
+**Strategic (unchanged, deferred):** commissioner UI to toggle categories per league; the missing admin `results`/`standings-review` pages (documented in `docs/TECH_DEBT.md` — the season-scoring UI is unreachable without them); Sentry not wired; TDD-deferred versioned-snapshot architecture.
 
 ## Artifacts & Where They Live
 
 | Artifact | What it is | Location | Status |
 |---|---|---|---|
-| Commit `1019ede` | The entire 2026 update | branch `claude/cfb-futures-mvp-ju2Cw` (pushed) | current |
-| PR #3 | Open pull request, base `main` | https://github.com/mrkfrnzn/zenithailabs/pull/3 | open, watched |
-| `supabase/migrations/003_add_new_categories.sql` | Constraint widening + `preseason_win_total` column + 2026 sample-league refresh | repo | current, **not yet applied to live DB** |
-| `src/lib/scoring/engine.ts` | New `wins_over_baseline` + `inverted_record` formulas, defaults | repo | current |
-| `src/app/admin/leagues/[leagueId]/draft-setup/page.tsx` + `ScoringEditor.tsx` | Admin scoring config page | repo | current |
-| `src/app/api/admin/leagues/[leagueId]/scoring/route.ts` | PATCH scoring/pick-count route | repo | current |
-| `samples/sample_{preseason_,}{most_improved,disaster_draft}*.csv` | 4 sample import/results CSVs | `samples/` | current |
-| Design-docs artifact | 3-tab PRD/GDD/TDD HTML | claude.ai artifact + `/tmp/claude-0/-home-user-zenithailabs/47c0ea0e-.../scratchpad/design-docs.html` | current (scratchpad is ephemeral) |
-| Source docs | Uploaded PRD/GDD/TDD `.docx` | `/root/.claude/uploads/47c0ea0e-.../` (PRD `50601295-`, GDD `61c24fe8-`, TDD `9b2420d6-`) | reference |
+| **Live app** | Deployed CFP War Chest | https://zenithailabs.vercel.app | Ready; login loads; DB not yet migrated |
+| Vercel project | `zenithailabs`, Hobby, branch `main`, 6 env vars set | vercel.com dashboard | current |
+| `scripts/setup-database.sql` | One-paste 001+002+003 for SQL Editor | branch `claude/cfb-futures-mvp-ju2Cw`, commit `4236e90` | current, **not yet run against the DB** |
+| `supabase/migrations/00{1,2,3}_*.sql` | The three real migrations | repo `main` | source of truth |
+| `docs/` (7 files) | Developer documentation | repo `main` (via PR #4) | current |
+| `.env.example` | Env var template (placeholders) | repo `main` | current |
+| `.env.local` | Real Supabase URL + publishable + secret keys | local working tree only, **gitignored & untracked** | secret — never commit |
+| `CFP_War_Chest_2026_Continuation_Brief.md` | This brief | repo (this file) | current |
 
 ## Principles & Gotchas to Carry Forward
 
-- **`Category` union lives in `src/types/database.ts`.** It's referenced in ~15 files. When adding a category: extend the union, then `DEFAULT_SCORING_CONFIGS` (typed `Record<Category, …>` — must be exhaustive), engine formula dispatch, `standings.ts` (`NAMED_FIELD` map + `category_points`), `parser.ts` `REQUIRED_COLUMNS` (also exhaustive), the import/results routes' `validCategories`, `utils.ts` label+color, Badge variant if a new color, and migration CHECK constraints on 5 tables (`draft_segments`, `draft_picks`, `scoring_configs`, `scores`, `result_imports`).
-- **`LeagueSettings.pick_counts` is now `Partial<Record<Category, number>>`** — a season only carries counts for its enabled categories. Index with `?? fallback`.
-- **Scoring is config-driven.** Formulas read `scoring_configs.config_json` (JSONB); the engine dispatches on `config.formula`. Record-based formulas (`wins_over_baseline`, `inverted_record`) are handled before the "no outcome ⇒ 0" guard because they score from wins/losses, not an outcome-bucket string.
-- **Results import path:** the raw result row is stored in `result_rows.raw_row_json`; at publish time the results route reads wins/losses from there and the baseline from `draftable_entities.preseason_win_total`. Column aliases for win total: `win_total`, `over_under`, `ou_line`, `vegas_win_total`, `preseason_wins`.
-- **Verification commands:** `npx tsc --noEmit`, `npx vitest run`, `npm run build`. `npm install` is required first (deps were not pre-installed). `next build` will fail without `RESEND_API_KEY` unless the Resend client stays lazy — keep it lazy.
-- **Pre-existing lint errors exist** in files NOT authored this session (`draft/page.tsx`, `leagues/[leagueId]/page.tsx`, `leagues/page.tsx` — unescaped apostrophes, unused vars). `next build` still passes. Don't expand scope to fix them unless asked.
-- **GitHub access is via `mcp__github__*` MCP tools only** (no `gh` CLI), scoped to `mrkfrnzn/zenithailabs`. Default branch is `main`.
-- **Commit trailers required** by session config: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` + a `Claude-Session:` line; PR bodies end with the Claude Code generated-with line. Do NOT put the model id in commits/PRs/code — chat only.
+- **Sandbox network policy blocks `supabase.co` and `vercel.app` (403 CONNECT denial).** Verify with `curl -sS "$HTTPS_PROXY/__agentproxy/status"`. Do not retry policy denials; do not claim you can run migrations/bootstrap from the container. GitHub, npm, and Anthropic hosts ARE reachable.
+- **Two different email systems** — don't conflate: the app's `RESEND_API_KEY` sends the app's *own* emails (invites, on-clock, standings). The **magic-link login email** is sent by **Supabase Auth's** own email provider (Supabase Dashboard → Authentication → Email/SMTP), which is separate and may be rate-limited on the default sender. If login emails don't arrive, check Supabase Auth email config, not Resend.
+- **Supabase Auth Site URL / Redirect URLs must point to the Vercel domain** (see Open Item 3) or magic-link login redirects to localhost.
+- **Vercel `NEXT_PUBLIC_*` vars are build-time-inlined** — they must be set *before* a deploy. They already are; any change to them requires a redeploy to take effect.
+- **`next build` does NOT fail on the 7 ESLint errors** in this repo (verified). Lint-failing ≠ build-failing; the Vercel deploy is unaffected. (`docs/TECH_DEBT.md` item 2 was corrected to say this.)
+- **The app boots without env vars but 500s on every route** (middleware constructs a Supabase client). This is why the first no-env deploy showed errors; it's expected, not a bug.
+- **Commit trailers** required by session config: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` + a `Claude-Session:` line. Do NOT put the model id in commits/PRs/code. **Merged-PR rule:** PRs #3/#4 are merged, so restart the branch from `origin/main` before adding new commits (already done for `scripts/`).
+- **GitHub access is via `mcp__github__*` tools only** (no `gh` CLI), scoped to `mrkfrnzn/zenithailabs`. Default branch `main`.
 
 ## Stakeholders / Glossary
 
-- **Mark Franzen** — the user; commissioner; email mark@zenithailabs.com.
-- **Mike Wade** — league member who proposed the two new categories.
-- **Darren Steadman** — provided 2025 scoring notes (referenced in docs).
-- **P4** — Power 4 conferences: SEC, Big Ten, Big 12, ACC. Disaster Draft eligibility = P4 + Notre Dame.
-- **Baseline** (Most Improved) — the locked preseason regular-season win total (Vegas over/under line), e.g. 5.5.
-- **Shoot the moon** — Disaster Draft's +200 winless bonus (Hearts card-game analogy).
+- **Mark Franzen** — the user; commissioner; email `mark@zenithailabs.com` (the likely `BOOTSTRAP_ADMIN_EMAIL`). Working from an **iPad** (Safari, no terminal) — all steps must be web-only.
+- **Bootstrap** — one-time creation of the first admin via `POST /api/auth/bootstrap`; only works while no admin exists.
+- **P4 + Notre Dame** — Disaster Draft eligibility pool. **Shoot the moon** — Disaster Draft's +200 winless bonus.
 
 ---
-*Start fresh — this brief is ground truth. Don't try to reconstruct the prior thread; work from here.*
+*Start fresh — this brief is ground truth. The single most important next action is: the user runs `scripts/setup-database.sql` in the Supabase SQL Editor, then bootstraps the admin, then sets the Supabase Auth Site/Redirect URLs. The agent cannot do the Supabase/Vercel network steps itself.*
