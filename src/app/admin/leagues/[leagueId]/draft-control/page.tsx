@@ -49,6 +49,38 @@ export default function DraftControlPage() {
     return () => { supabase.removeChannel(channel) }
   }, [leagueId, load])
 
+  // Lock the pool and start in a single press - lock_pool is a precondition of
+  // start, so there is no reason to make the commissioner run them separately.
+  const startDraft = async () => {
+    setActionLoading(true)
+    const post = async (body: Record<string, unknown>) => {
+      const res = await fetch(`/api/admin/leagues/${leagueId}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      return { ok: res.ok, data: await res.json() }
+    }
+
+    const locked = await post({ action: 'lock_pool' })
+    if (!locked.ok) {
+      showMessage(locked.data.error ?? 'Could not lock the draft pool', 'error')
+      setActionLoading(false)
+      return
+    }
+
+    const started = await post({ action: 'start' })
+    if (!started.ok) {
+      showMessage(started.data.error ?? 'Could not start the draft', 'error')
+      setActionLoading(false)
+      return
+    }
+
+    showMessage('Draft started')
+    await load()
+    setActionLoading(false)
+  }
+
   const action = async (body: Record<string, unknown>) => {
     setActionLoading(true)
     const res = await fetch(`/api/admin/leagues/${leagueId}/draft`, {
@@ -86,6 +118,36 @@ export default function DraftControlPage() {
       .filter(p => p.category === activeCategory)
       .map(p => p.draftable_entity_id)
   )
+
+  const totalScheduledPicks = ((segments ?? []) as Array<{ pick_count_per_player: number }>)
+    .reduce((sum, sgm) => sum + (sgm.pick_count_per_player ?? 0), 0) *
+    ((members ?? []) as Array<{ role_in_league: string }>).filter(m => m.role_in_league === 'player').length
+
+  const orderedPlayers = ((members ?? []) as Array<{
+    user_id: string
+    display_name: string
+    draft_position: number | null
+    role_in_league: string
+  }>)
+    .filter(m => m.role_in_league === 'player')
+    .sort((a, b) => (a.draft_position ?? 99) - (b.draft_position ?? 99))
+
+  const orderIsSet = orderedPlayers.some(m => m.draft_position != null)
+
+  // Picks already made in the live category, per player.
+  const picksInCategory = ((picks ?? []) as Array<{ player_user_id: string; category: string }>)
+    .filter(p => p.category === activeCategory)
+
+  const picksPerPlayer = (activeSegment as { pick_count_per_player?: number } | undefined)?.pick_count_per_player ?? 0
+  const currentRound = picksPerPlayer
+    ? Math.min(picksPerPlayer, Math.floor(picksInCategory.length / Math.max(orderedPlayers.length, 1)) + 1)
+    : 0
+
+  const remainingByPlayer = new Map<string, number>()
+  for (const m of orderedPlayers) {
+    const made = picksInCategory.filter(p => p.player_user_id === m.user_id).length
+    remainingByPlayer.set(m.user_id, Math.max(0, picksPerPlayer - made))
+  }
 
   const availableForCategory = !activeCategory
     ? []
@@ -150,24 +212,54 @@ export default function DraftControlPage() {
           </div>
         </div>
 
+        {/* Draft Order */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <h2 className="font-semibold mb-4">Draft Order</h2>
+          {!orderIsSet ? (
+            <p className="text-sm text-zinc-500">Not set yet — press Randomize Draft Order.</p>
+          ) : (
+            <ol className="space-y-2 text-sm">
+              {orderedPlayers.map(m => {
+                const onClock = m.user_id === ds?.current_player_user_id
+                return (
+                  <li
+                    key={m.user_id}
+                    className={`flex items-center justify-between rounded px-2 py-1 ${onClock ? 'bg-amber-500/15 text-amber-300 font-semibold' : ''}`}
+                  >
+                    <span>
+                      <span className="text-zinc-500 mr-2">{m.draft_position}.</span>
+                      {m.display_name}
+                    </span>
+                    {activeCategory && (
+                      <span className="text-xs text-zinc-400">
+                        {remainingByPlayer.get(m.user_id) ?? 0} left
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+        </div>
+
         {/* Controls */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-3">
           <h2 className="font-semibold mb-4">Controls</h2>
 
           {ds?.status === 'not_started' && (
             <>
-              <button onClick={() => action({ action: 'set_order', player_ids: (members as Array<{ user_id: string }>).map(m => m.user_id), randomize: true })}
+              <button onClick={() => action({ action: 'set_order', player_ids: orderedPlayers.map(m => m.user_id), randomize: true })}
                 className="w-full bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg text-sm font-medium" disabled={actionLoading}>
                 🎲 Randomize Draft Order
               </button>
-              <button onClick={() => action({ action: 'lock_pool' })}
-                className="w-full bg-blue-500/80 hover:bg-blue-500 py-2 rounded-lg text-sm font-medium" disabled={actionLoading}>
-                🔒 Lock Draft Pool
+              <button onClick={startDraft}
+                className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-sm disabled:opacity-40"
+                disabled={actionLoading || !orderIsSet}>
+                ▶ Lock Pool &amp; Start Draft
               </button>
-              <button onClick={() => action({ action: 'start' })}
-                className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-sm" disabled={actionLoading}>
-                ▶ Start Draft
-              </button>
+              {!orderIsSet && (
+                <p className="text-xs text-zinc-500 text-center">Randomize the draft order first.</p>
+              )}
             </>
           )}
 
@@ -232,8 +324,16 @@ export default function DraftControlPage() {
             <div className="text-xl font-bold text-amber-400">
               {currentPlayer?.display_name ?? 'Unknown player'}
               <span className="ml-2 text-sm font-normal text-zinc-400">
-                pick #{ds.current_overall_pick_number}
+                overall pick #{ds.current_overall_pick_number} of {totalScheduledPicks}
               </span>
+            </div>
+
+            <div className="text-sm text-zinc-400">
+              Drafting <span className="text-zinc-200 font-medium">{activeCategory ? categoryLabel(activeCategory) : '—'}</span>
+              {picksPerPlayer > 0 && (
+                <> · round <span className="text-zinc-200 font-medium">{currentRound}</span> of {picksPerPlayer}</>
+              )}
+              {' '}· <span className="text-zinc-200 font-medium">{remainingByPlayer.get(ds.current_player_user_id) ?? 0}</span> left for {currentPlayer?.display_name ?? 'this player'} in this category
             </div>
 
             <input
