@@ -7,6 +7,14 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { categoryLabel, categoryColor, formatOdds } from '@/lib/utils'
 
+/** Surname for sorting: last word, ignoring generational suffixes. */
+function surname(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  const suffixes = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v'])
+  while (parts.length > 1 && suffixes.has(parts[parts.length - 1].toLowerCase())) parts.pop()
+  return parts[parts.length - 1] ?? fullName
+}
+
 export default function DraftControlPage() {
   const params = useParams()
   const leagueId = params.leagueId as string
@@ -22,6 +30,7 @@ export default function DraftControlPage() {
   const [overrideReason, setOverrideReason] = useState('')
   const [overrideEntityId, setOverrideEntityId] = useState('')
   const [entitySearch, setEntitySearch] = useState('')
+  const [sortMode, setSortMode] = useState<'odds_asc' | 'odds_desc' | 'first' | 'last'>('odds_asc')
   const [skipReason, setSkipReason] = useState('')
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -166,10 +175,22 @@ export default function DraftControlPage() {
           if (e.athlete_name && e.school_name) parts.push('(' + e.school_name + ')')
           if (e.conference) parts.push('- ' + e.conference)
           if (e.odds != null) parts.push('- ' + formatOdds(e.odds))
-          return { id: e.id, label: parts.join(' '), name }
+          return { id: e.id, label: parts.join(' '), name, odds: e.odds }
         })
         .filter(e => e.label.toLowerCase().includes(entitySearch.toLowerCase()))
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .sort((a, b) => {
+          if (sortMode === 'first') return a.name.localeCompare(b.name)
+          if (sortMode === 'last') {
+            const byLast = surname(a.name).localeCompare(surname(b.name))
+            return byLast !== 0 ? byLast : a.name.localeCompare(b.name)
+          }
+          // Odds sorts: entities without a price (Cinderella) always sit last.
+          if (a.odds == null && b.odds == null) return a.name.localeCompare(b.name)
+          if (a.odds == null) return 1
+          if (b.odds == null) return -1
+          const diff = sortMode === 'odds_desc' ? b.odds - a.odds : a.odds - b.odds
+          return diff !== 0 ? diff : a.name.localeCompare(b.name)
+        })
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -343,12 +364,24 @@ export default function DraftControlPage() {
               {' '}· <span className="text-zinc-200 font-medium">{remainingByPlayer.get(ds.current_player_user_id) ?? 0}</span> left for {currentPlayer?.display_name ?? 'this player'} in this category
             </div>
 
-            <input
-              value={entitySearch}
-              onChange={e => setEntitySearch(e.target.value)}
-              placeholder="Search available..."
-              className="w-full bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
-            />
+            <div className="flex gap-2">
+              <input
+                value={entitySearch}
+                onChange={e => setEntitySearch(e.target.value)}
+                placeholder="Search available..."
+                className="flex-1 bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
+              />
+              <select
+                value={sortMode}
+                onChange={e => setSortMode(e.target.value as 'odds_asc' | 'odds_desc' | 'first' | 'last')}
+                className="bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
+              >
+                <option value="odds_asc">Odds: favorites first</option>
+                <option value="odds_desc">Odds: longshots first</option>
+                <option value="first">Name: first A-Z</option>
+                <option value="last">Name: last A-Z</option>
+              </select>
+            </div>
 
             <select
               value={overrideEntityId}
