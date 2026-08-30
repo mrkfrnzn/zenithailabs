@@ -263,6 +263,13 @@ export default function DraftControlPage() {
             </>
           )}
 
+          {ds?.status === 'active' && picksInCategory.length === 0 && (
+            <button onClick={() => action({ action: 'set_order', player_ids: orderedPlayers.map(m => m.user_id), randomize: true })}
+              className="w-full bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg text-sm font-medium" disabled={actionLoading}>
+              🎲 Draw order for {activeCategory ? categoryLabel(activeCategory) : 'this category'}
+            </button>
+          )}
+
           {ds?.status === 'active' && !ds.paused && (
             <button onClick={() => action({ action: 'pause' })}
               className="w-full bg-yellow-500/80 hover:bg-yellow-500 text-black py-2 rounded-lg text-sm font-medium" disabled={actionLoading}>
