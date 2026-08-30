@@ -212,6 +212,115 @@ export async function POST(
     return NextResponse.json({ success: true })
   }
 
+  // -- OVERRIDE (admin records the pick for whoever is on the clock) --------
+  if (action === 'override') {
+    const { entity_id, reason } = parsed.data as { action: 'override'; entity_id: string; reason: string }
+
+    const { data: draftState } = await supabase
+      .from('draft_state').select('*').eq('league_id', leagueId).single()
+
+    if (!draftState || draftState.status !== 'active') {
+      return NextResponse.json({ error: 'Draft is not active' }, { status: 409 })
+    }
+    if (!draftState.current_player_user_id || !draftState.current_segment_id) {
+      return NextResponse.json({ error: 'No player is on the clock' }, { status: 409 })
+    }
+
+    const { data: segment } = await supabase
+      .from('draft_segments').select('*').eq('id', draftState.current_segment_id).single()
+    if (!segment) return NextResponse.json({ error: 'No active segment' }, { status: 409 })
+
+    const category = segment.category as Category
+
+    const { data: entity } = await supabase
+      .from('draftable_entities').select('*').eq('id', entity_id).eq('league_id', leagueId).single()
+    if (!entity) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
+
+    if (!entity.eligible_categories_json.includes(category)) {
+      return NextResponse.json({
+        error: 'Not eligible for the active category: ' + category,
+        eligible: entity.eligible_categories_json,
+      }, { status: 422 })
+    }
+
+    const { data: existingPick } = await supabase
+      .from('draft_picks').select('id')
+      .eq('league_id', leagueId)
+      .eq('draftable_entity_id', entity_id)
+      .eq('category', category)
+      .maybeSingle()
+
+    if (existingPick) {
+      return NextResponse.json({ error: 'Already drafted in this category' }, { status: 409 })
+    }
+
+    const schedule = await buildSchedule(supabase, leagueId)
+    const scheduled = schedule.find(p => p.overall_pick_number === draftState.current_overall_pick_number)
+
+    const { data: pick, error: pickError } = await supabase
+      .from('draft_picks')
+      .insert({
+        league_id: leagueId,
+        draft_segment_id: segment.id,
+        round_number: scheduled?.round_number ?? 1,
+        overall_pick_number: draftState.current_overall_pick_number,
+        player_user_id: draftState.current_player_user_id,
+        draftable_entity_id: entity_id,
+        category,
+        locked_odds: entity.odds,
+        admin_override: true,
+      })
+      .select()
+      .single()
+
+    if (pickError) {
+      if (pickError.code === '23505') {
+        return NextResponse.json({ error: 'Pick number already taken (concurrent pick conflict)' }, { status: 409 })
+      }
+      return NextResponse.json({ error: pickError.message }, { status: 500 })
+    }
+
+    await writeAuditLog({
+      league_id: leagueId,
+      actor_user_id: admin.id,
+      action: 'override_pick',
+      entity_type: 'draft_pick',
+      entity_id: pick.id,
+      after_json: { reason, on_behalf_of: draftState.current_player_user_id, entity_id, category },
+    })
+
+    await advanceDraftState(supabase, leagueId, draftState.current_overall_pick_number + 1)
+    return NextResponse.json(pick, { status: 201 })
+  }
+
+  // -- SKIP (advance past the current pick without recording one) -----------
+  if (action === 'skip') {
+    const { reason } = parsed.data as { action: 'skip'; reason: string }
+
+    const { data: draftState } = await supabase
+      .from('draft_state').select('*').eq('league_id', leagueId).single()
+
+    if (!draftState || draftState.status !== 'active') {
+      return NextResponse.json({ error: 'Draft is not active' }, { status: 409 })
+    }
+
+    await writeAuditLog({
+      league_id: leagueId,
+      actor_user_id: admin.id,
+      action: 'skip_pick',
+      entity_type: 'league',
+      entity_id: leagueId,
+      after_json: {
+        reason,
+        skipped_pick_number: draftState.current_overall_pick_number,
+        player_user_id: draftState.current_player_user_id,
+      },
+    })
+
+    await advanceDraftState(supabase, leagueId, draftState.current_overall_pick_number + 1)
+    return NextResponse.json({ success: true })
+  }
+
   // ── COMPLETE ──────────────────────────────────────────────────────────────
   if (action === 'complete') {
     await supabase.from('draft_state').update({ status: 'completed' }).eq('league_id', leagueId)
@@ -221,4 +330,83 @@ export async function POST(
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+}
+
+
+type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>
+
+/** Rebuild the full snake schedule for a league from its members and segments. */
+async function buildSchedule(supabase: ServiceClient, leagueId: string) {
+  const { data: members } = await supabase
+    .from('league_members')
+    .select('user_id, draft_position')
+    .eq('league_id', leagueId)
+    .eq('role_in_league', 'player')
+    .not('draft_position', 'is', null)
+    .order('draft_position')
+
+  const { data: segments } = await supabase
+    .from('draft_segments')
+    .select('*')
+    .eq('league_id', leagueId)
+    .order('segment_order')
+
+  if (!members || !segments) return []
+
+  return generateSnakeOrder(
+    members.map((m: { user_id: string }) => m.user_id),
+    segments.map((s: { id: string; category: string; pick_count_per_player: number }) => ({
+      draft_segment_id: s.id,
+      category: s.category as Category,
+      pick_count_per_player: s.pick_count_per_player,
+    }))
+  )
+}
+
+/**
+ * Move the draft to nextPickNumber. Mirrors the player-side advance in
+ * /api/leagues/[leagueId]/draft so an admin-entered pick behaves identically:
+ * roll the segment over when the category changes, mark the draft complete when
+ * the schedule runs out, and notify the next player (best effort).
+ */
+async function advanceDraftState(supabase: ServiceClient, leagueId: string, nextPickNumber: number) {
+  const { data: members } = await supabase
+    .from('league_members')
+    .select('user_id, display_name, users(email)')
+    .eq('league_id', leagueId)
+    .eq('role_in_league', 'player')
+    .not('draft_position', 'is', null)
+    .order('draft_position')
+
+  const schedule = await buildSchedule(supabase, leagueId)
+  const nextPick = schedule.find(p => p.overall_pick_number === nextPickNumber)
+
+  if (!nextPick) {
+    await supabase.from('draft_state').update({ status: 'completed' }).eq('league_id', leagueId)
+    await supabase.from('leagues').update({ status: 'drafted' }).eq('id', leagueId)
+    return
+  }
+
+  const prevSegmentId = schedule.find(p => p.overall_pick_number === nextPickNumber - 1)?.draft_segment_id
+  if (prevSegmentId && prevSegmentId !== nextPick.draft_segment_id) {
+    await supabase.from('draft_segments').update({ status: 'completed' }).eq('id', prevSegmentId)
+    await supabase.from('draft_segments').update({ status: 'active' }).eq('id', nextPick.draft_segment_id)
+  }
+
+  await supabase.from('draft_state').update({
+    current_overall_pick_number: nextPickNumber,
+    current_player_user_id: nextPick.player_user_id,
+    current_segment_id: nextPick.draft_segment_id,
+  }).eq('league_id', leagueId)
+
+  const onClockMember = (members ?? []).find((m: { user_id: string }) => m.user_id === nextPick.player_user_id)
+  if (onClockMember) {
+    const emailData = onClockMember as { display_name?: string; users?: { email?: string } }
+    sendOnClockEmail({
+      email: emailData.users?.email ?? '',
+      display_name: emailData.display_name ?? '',
+      league_id: leagueId,
+      pick_number: nextPickNumber,
+    }).catch(console.error)
+  }
 }
