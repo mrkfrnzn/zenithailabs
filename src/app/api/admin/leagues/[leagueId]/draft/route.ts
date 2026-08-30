@@ -20,7 +20,7 @@ const ActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('resume') }),
   z.object({ action: z.literal('undo') }),
   z.object({ action: z.literal('skip'), reason: z.string().min(1) }),
-  z.object({ action: z.literal('override'), entity_id: z.string().uuid(), reason: z.string().min(1) }),
+  z.object({ action: z.literal('override'), entity_id: z.string().uuid(), reason: z.string().optional() }),
   z.object({ action: z.literal('complete') }),
 ])
 
@@ -346,7 +346,7 @@ export async function POST(
 
   // -- OVERRIDE (admin records the pick for whoever is on the clock) --------
   if (action === 'override') {
-    const { entity_id, reason } = parsed.data as { action: 'override'; entity_id: string; reason: string }
+    const { entity_id, reason } = parsed.data as { action: 'override'; entity_id: string; reason?: string }
 
     const { data: draftState } = await supabase
       .from('draft_state').select('*').eq('league_id', leagueId).single()
@@ -418,7 +418,12 @@ export async function POST(
       action: 'override_pick',
       entity_type: 'draft_pick',
       entity_id: pick.id,
-      after_json: { reason, on_behalf_of: draftState.current_player_user_id, entity_id, category },
+      after_json: {
+        reason: reason?.trim() || 'entered by commissioner',
+        on_behalf_of: draftState.current_player_user_id,
+        entity_id,
+        category,
+      },
     })
 
     await advanceDraftState(supabase, leagueId, draftState.current_overall_pick_number + 1)

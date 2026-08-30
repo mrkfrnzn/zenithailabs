@@ -454,18 +454,23 @@ export default function DraftControlPage() {
             <input
               value={overrideReason}
               onChange={e => setOverrideReason(e.target.value)}
-              placeholder="Reason (e.g. called on Zoom)"
+              placeholder="Note (optional)"
               className="w-full bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
             />
 
             <button
               onClick={() => {
-                if (!overrideEntityId || !overrideReason.trim()) return
-                action({ action: 'override', entity_id: overrideEntityId, reason: overrideReason.trim() })
+                if (!overrideEntityId) return
+                action({
+                  action: 'override',
+                  entity_id: overrideEntityId,
+                  ...(overrideReason.trim() ? { reason: overrideReason.trim() } : {}),
+                })
                 setOverrideEntityId('')
                 setEntitySearch('')
+                setOverrideReason('')
               }}
-              disabled={actionLoading || !overrideEntityId || !overrideReason.trim()}
+              disabled={actionLoading || !overrideEntityId}
               className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold py-3 rounded-lg"
             >
               Record Pick
