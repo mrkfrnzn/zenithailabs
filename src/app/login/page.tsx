@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
   // useSearchParams() must be read inside a Suspense boundary during prerender.
@@ -15,9 +15,10 @@ export default function LoginPage() {
 
 function LoginForm() {
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || '/leagues'
 
@@ -26,34 +27,14 @@ function LoginForm() {
     setLoading(true)
     setError('')
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=${redirectTo}`,
-        shouldCreateUser: false,
-      },
-    })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
-    } else {
-      setSent(true)
+      setLoading(false)
+      return
     }
-    setLoading(false)
-  }
-
-  if (sent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <div className="max-w-md w-full mx-4 text-center">
-          <div className="text-4xl mb-4">🏈</div>
-          <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
-          <p className="text-zinc-400">
-            We sent a magic link to <strong className="text-white">{email}</strong>.
-            Click it to sign in — it expires in 24 hours.
-          </p>
-        </div>
-      </div>
-    )
+    router.push(redirectTo)
+    router.refresh()
   }
 
   return (
@@ -73,10 +54,27 @@ function LoginForm() {
             <input
               id="email"
               type="email"
+              autoComplete="username"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
+              className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-2">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
               className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             />
           </div>
@@ -92,7 +90,7 @@ function LoginForm() {
             disabled={loading}
             className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-3 rounded-lg transition-colors"
           >
-            {loading ? 'Sending link…' : 'Send magic link'}
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
 
           <p className="text-center text-xs text-zinc-500">
