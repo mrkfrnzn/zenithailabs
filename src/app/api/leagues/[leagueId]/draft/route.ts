@@ -197,13 +197,14 @@ export async function GET(
   const { leagueId } = await params
   const supabase = await createServiceClient()
 
-  const [{ data: draftState }, { data: picks }, { data: entities }, { data: members }] =
+  const [{ data: draftState }, { data: picks }, { data: entities }, { data: members }, { data: segments }] =
     await Promise.all([
       supabase.from('draft_state').select('*').eq('league_id', leagueId).single(),
       supabase.from('draft_picks').select('*, draftable_entities(*)').eq('league_id', leagueId).order('overall_pick_number'),
       supabase.from('draftable_entities').select('*').eq('league_id', leagueId),
       supabase.from('league_members').select('*, users(id, email, display_name)').eq('league_id', leagueId),
+      supabase.from('draft_segments').select('*').eq('league_id', leagueId).order('segment_order'),
     ])
 
-  return NextResponse.json({ draftState, picks, entities, members })
+  return NextResponse.json({ draftState, picks, entities, members, segments })
 }

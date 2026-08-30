@@ -15,10 +15,13 @@ export default function DraftControlPage() {
     picks: Array<Record<string, unknown>>
     members: Array<Record<string, unknown>>
     entities: Array<Record<string, unknown>>
+    segments: Array<Record<string, unknown>>
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
+  const [overrideEntityId, setOverrideEntityId] = useState('')
+  const [entitySearch, setEntitySearch] = useState('')
   const [skipReason, setSkipReason] = useState('')
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -61,15 +64,50 @@ export default function DraftControlPage() {
 
   if (loading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">Loading…</div>
 
-  const { draftState, picks, members } = draftData!
+  const { draftState, picks, members, entities, segments } = draftData!
   const ds = draftState as {
     status: string
     paused: boolean
     current_overall_pick_number: number
     current_player_user_id: string
+    current_segment_id: string
   } | null
   const currentPlayer = (members as Array<{ user_id: string; display_name: string }>)?.find(m => m.user_id === ds?.current_player_user_id)
   const totalPicks = (picks as Array<unknown>)?.length ?? 0
+
+  const activeSegment = (segments as Array<{ id: string; category: string }> | undefined)?.find(
+    s => s.id === ds?.current_segment_id
+  )
+  const activeCategory = activeSegment?.category ?? null
+
+  // Entities eligible for the live category that nobody has taken in it yet.
+  const takenInCategory = new Set(
+    ((picks ?? []) as Array<{ draftable_entity_id: string; category: string }>)
+      .filter(p => p.category === activeCategory)
+      .map(p => p.draftable_entity_id)
+  )
+
+  const availableForCategory = !activeCategory
+    ? []
+    : ((entities ?? []) as Array<{
+        id: string
+        athlete_name: string | null
+        school_name: string | null
+        conference: string | null
+        odds: number | null
+        eligible_categories_json: string[]
+      }>)
+        .filter(e => e.eligible_categories_json?.includes(activeCategory) && !takenInCategory.has(e.id))
+        .map(e => {
+          const name = e.athlete_name ?? e.school_name ?? '-'
+          const parts = [name]
+          if (e.athlete_name && e.school_name) parts.push('(' + e.school_name + ')')
+          if (e.conference) parts.push('- ' + e.conference)
+          if (e.odds != null) parts.push('- ' + formatOdds(e.odds))
+          return { id: e.id, label: parts.join(' '), name }
+        })
+        .filter(e => e.label.toLowerCase().includes(entitySearch.toLowerCase()))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -180,6 +218,66 @@ export default function DraftControlPage() {
             </button>
           )}
         </div>
+
+        {/* On the Clock - admin records the pick called out on the call */}
+        {ds?.status === 'active' && (
+          <div className="sm:col-span-2 bg-zinc-900 border border-amber-500/40 rounded-xl p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">On the Clock</h2>
+              {activeCategory && (
+                <Badge variant={categoryColor(activeCategory)}>{categoryLabel(activeCategory)}</Badge>
+              )}
+            </div>
+
+            <div className="text-xl font-bold text-amber-400">
+              {currentPlayer?.display_name ?? 'Unknown player'}
+              <span className="ml-2 text-sm font-normal text-zinc-400">
+                pick #{ds.current_overall_pick_number}
+              </span>
+            </div>
+
+            <input
+              value={entitySearch}
+              onChange={e => setEntitySearch(e.target.value)}
+              placeholder="Search available..."
+              className="w-full bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
+            />
+
+            <select
+              value={overrideEntityId}
+              onChange={e => setOverrideEntityId(e.target.value)}
+              size={10}
+              className="w-full bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
+            >
+              {availableForCategory.length === 0 && <option value="">No entities available</option>}
+              {availableForCategory.map(e => (
+                <option key={e.id} value={e.id}>{e.label}</option>
+              ))}
+            </select>
+
+            <div className="text-xs text-zinc-500">{availableForCategory.length} available</div>
+
+            <input
+              value={overrideReason}
+              onChange={e => setOverrideReason(e.target.value)}
+              placeholder="Reason (e.g. called on Zoom)"
+              className="w-full bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
+            />
+
+            <button
+              onClick={() => {
+                if (!overrideEntityId || !overrideReason.trim()) return
+                action({ action: 'override', entity_id: overrideEntityId, reason: overrideReason.trim() })
+                setOverrideEntityId('')
+                setEntitySearch('')
+              }}
+              disabled={actionLoading || !overrideEntityId || !overrideReason.trim()}
+              className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold py-3 rounded-lg"
+            >
+              Record Pick
+            </button>
+          </div>
+        )}
 
         {/* Pick History */}
         <div className="sm:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
