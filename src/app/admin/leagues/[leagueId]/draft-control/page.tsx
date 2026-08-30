@@ -31,6 +31,7 @@ export default function DraftControlPage() {
   const [overrideEntityId, setOverrideEntityId] = useState('')
   const [entitySearch, setEntitySearch] = useState('')
   const [sortMode, setSortMode] = useState<'odds_asc' | 'odds_desc' | 'first' | 'last'>('odds_asc')
+  const [nextCategory, setNextCategory] = useState('')
   const [skipReason, setSkipReason] = useState('')
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -158,6 +159,28 @@ export default function DraftControlPage() {
     remainingByPlayer.set(m.user_id, Math.max(0, picksPerPlayer - made))
   }
 
+  // Progress per category, for the "which game are we drafting" selector.
+  const madeBySegment = new Map<string, number>()
+  for (const p of ((picks ?? []) as Array<{ draft_segment_id: string }>)) {
+    madeBySegment.set(p.draft_segment_id, (madeBySegment.get(p.draft_segment_id) ?? 0) + 1)
+  }
+
+  const categoryOptions = ((segments ?? []) as Array<{
+    id: string
+    category: string
+    segment_order: number
+    pick_count_per_player: number
+  }>)
+    .slice()
+    .sort((a, b) => a.segment_order - b.segment_order)
+    .map(sgm => {
+      const total = sgm.pick_count_per_player * Math.max(orderedPlayers.length, 1)
+      const made = madeBySegment.get(sgm.id) ?? 0
+      return { id: sgm.id, category: sgm.category, made, total, done: made >= total }
+    })
+
+  const canChooseCategory = ds?.status !== 'completed' && picksInCategory.length === 0
+
   const availableForCategory = !activeCategory
     ? []
     : ((entities ?? []) as Array<{
@@ -207,7 +230,8 @@ export default function DraftControlPage() {
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 py-8 grid gap-6 sm:grid-cols-2">
+      <main className="max-w-7xl mx-auto px-4 py-8 grid gap-6 lg:grid-cols-4 items-start">
+        <div className="lg:col-span-1 space-y-6">
         {/* Status */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <h2 className="font-semibold mb-4">Draft Status</h2>
@@ -267,12 +291,39 @@ export default function DraftControlPage() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-3">
           <h2 className="font-semibold mb-4">Controls</h2>
 
+          {canChooseCategory && (
+            <div className="space-y-2 pb-3 mb-3 border-b border-zinc-800">
+              <label className="block text-xs uppercase tracking-wider text-zinc-500">1. Choose the game</label>
+              <select
+                value={nextCategory || activeCategory || ''}
+                onChange={e => setNextCategory(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 text-sm rounded px-3 py-2"
+              >
+                <option value="">Select a category...</option>
+                {categoryOptions.map(c => (
+                  <option key={c.id} value={c.category} disabled={c.done}>
+                    {categoryLabel(c.category)}{c.done ? ' - drafted' : c.made > 0 ? ` - ${c.made}/${c.total}` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => action({ action: 'set_category', category: nextCategory })}
+                disabled={actionLoading || !nextCategory}
+                className="w-full bg-blue-500/80 hover:bg-blue-500 disabled:opacity-40 py-2 rounded-lg text-sm font-medium"
+              >
+                Set game
+              </button>
+            </div>
+          )}
+
           {ds?.status === 'not_started' && (
             <>
+              <label className="block text-xs uppercase tracking-wider text-zinc-500">2. Draw the order</label>
               <button onClick={() => action({ action: 'set_order', player_ids: orderedPlayers.map(m => m.user_id), randomize: true })}
                 className="w-full bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg text-sm font-medium" disabled={actionLoading}>
                 🎲 Randomize Draft Order
               </button>
+              <label className="block text-xs uppercase tracking-wider text-zinc-500 pt-2">3. Go</label>
               <button onClick={startDraft}
                 className="w-full bg-amber-500 text-black font-bold py-2 rounded-lg text-sm disabled:opacity-40"
                 disabled={actionLoading || !orderIsSet}>
@@ -339,9 +390,12 @@ export default function DraftControlPage() {
           )}
         </div>
 
+        </div>
+
+        <div className="lg:col-span-3 space-y-6">
         {/* On the Clock - admin records the pick called out on the call */}
         {ds?.status === 'active' && (
-          <div className="sm:col-span-2 bg-zinc-900 border border-amber-500/40 rounded-xl p-6 space-y-3">
+          <div className="bg-zinc-900 border border-amber-500/40 rounded-xl p-6 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">On the Clock</h2>
               {activeCategory && (
@@ -420,7 +474,7 @@ export default function DraftControlPage() {
         )}
 
         {/* Pick History */}
-        <div className="sm:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-zinc-800">
             <h2 className="font-semibold">Pick History ({totalPicks})</h2>
           </div>
@@ -462,6 +516,7 @@ export default function DraftControlPage() {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       </main>
     </div>
