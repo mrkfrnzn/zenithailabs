@@ -102,6 +102,36 @@ export async function POST(
       }
     }
 
+    // Each category is drafted as its own mini-draft with a freshly drawn order.
+    // Reshuffling is only safe at a category boundary: the snake schedule is
+    // rebuilt from draft_position on every advance, so changing it once picks
+    // exist in the live category would reorder that category mid-flight.
+    const midDraft = league.status === 'drafting'
+    if (midDraft) {
+      const { data: ds } = await supabase
+        .from('draft_state').select('current_segment_id, current_overall_pick_number')
+        .eq('league_id', leagueId).single()
+
+      if (ds?.current_segment_id) {
+        const { data: seg } = await supabase
+          .from('draft_segments').select('category').eq('id', ds.current_segment_id).single()
+
+        if (seg) {
+          const { count } = await supabase
+            .from('draft_picks')
+            .select('id', { count: 'exact', head: true })
+            .eq('league_id', leagueId)
+            .eq('category', seg.category)
+
+          if ((count ?? 0) > 0) {
+            return NextResponse.json({
+              error: 'Picks have already been made in this category. Finish it before drawing a new order.',
+            }, { status: 409 })
+          }
+        }
+      }
+    }
+
     await Promise.all(
       orderedIds.map((uid, idx) =>
         supabase.from('league_members')
@@ -111,8 +141,24 @@ export async function POST(
       )
     )
 
-    await supabase.from('leagues').update({ status: 'draft_ready' }).eq('id', leagueId)
-    await writeAuditLog({ league_id: leagueId, actor_user_id: admin.id, action: 'set_draft_order', entity_type: 'league', entity_id: leagueId, after_json: { order: orderedIds } })
+    if (midDraft) {
+      // Re-point the clock at whoever now holds the current pick number.
+      const schedule = await buildSchedule(supabase, leagueId)
+      const { data: ds } = await supabase
+        .from('draft_state').select('current_overall_pick_number')
+        .eq('league_id', leagueId).single()
+      const current = schedule.find(p => p.overall_pick_number === ds?.current_overall_pick_number)
+      if (current) {
+        await supabase.from('draft_state').update({
+          current_player_user_id: current.player_user_id,
+          current_segment_id: current.draft_segment_id,
+        }).eq('league_id', leagueId)
+      }
+    } else {
+      await supabase.from('leagues').update({ status: 'draft_ready' }).eq('id', leagueId)
+    }
+
+    await writeAuditLog({ league_id: leagueId, actor_user_id: admin.id, action: 'set_draft_order', entity_type: 'league', entity_id: leagueId, after_json: { order: orderedIds, mid_draft: midDraft } })
     return NextResponse.json({ success: true, order: orderedIds })
   }
 
