@@ -13,6 +13,7 @@ import { Category } from '@/types'
 
 const ActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('lock_pool') }),
+  z.object({ action: z.literal('set_category'), category: z.string().min(1) }),
   z.object({ action: z.literal('set_order'), player_ids: z.array(z.string().uuid()), randomize: z.boolean().optional() }),
   z.object({ action: z.literal('start') }),
   z.object({ action: z.literal('pause') }),
@@ -160,6 +161,91 @@ export async function POST(
 
     await writeAuditLog({ league_id: leagueId, actor_user_id: admin.id, action: 'set_draft_order', entity_type: 'league', entity_id: leagueId, after_json: { order: orderedIds, mid_draft: midDraft } })
     return NextResponse.json({ success: true, order: orderedIds })
+  }
+
+  // -- SET CATEGORY (choose which game is drafted next) ---------------------
+  if (action === 'set_category') {
+    const { category } = parsed.data as { action: 'set_category'; category: string }
+
+    const target = segments.find(s => s.category === category)
+    if (!target) {
+      return NextResponse.json({ error: 'That category is not set up for this league' }, { status: 404 })
+    }
+
+    const { data: allPicks } = await supabase
+      .from('draft_picks')
+      .select('draft_segment_id, overall_pick_number')
+      .eq('league_id', leagueId)
+      .order('overall_pick_number')
+
+    const picks = allPicks ?? []
+    const playerCount = league.league_members.filter(
+      (m: { role_in_league: string }) => m.role_in_league === 'player'
+    ).length
+
+    const madeBySegment = new Map<string, number>()
+    const firstPickBySegment = new Map<string, number>()
+    for (const p of picks) {
+      madeBySegment.set(p.draft_segment_id, (madeBySegment.get(p.draft_segment_id) ?? 0) + 1)
+      if (!firstPickBySegment.has(p.draft_segment_id)) {
+        firstPickBySegment.set(p.draft_segment_id, p.overall_pick_number)
+      }
+    }
+
+    if ((madeBySegment.get(target.id) ?? 0) > 0) {
+      return NextResponse.json({ error: 'That category has already been drafted' }, { status: 409 })
+    }
+
+    for (const s of segments) {
+      const made = madeBySegment.get(s.id) ?? 0
+      if (made > 0 && made < s.pick_count_per_player * playerCount) {
+        return NextResponse.json({
+          error: s.category + ' is only part-drafted - finish it before starting another category',
+        }, { status: 409 })
+      }
+    }
+
+    // Completed categories keep their order, the chosen one comes next, the rest
+    // follow. This keeps the global snake schedule aligned with picks already made.
+    const finished = segments
+      .filter(s => (madeBySegment.get(s.id) ?? 0) > 0)
+      .sort((a, b) => (firstPickBySegment.get(a.id) ?? 0) - (firstPickBySegment.get(b.id) ?? 0))
+    const finishedIds = new Set(finished.map(s => s.id))
+    const rest = segments
+      .filter(s => s.id !== target.id && !finishedIds.has(s.id))
+      .sort((a, b) => a.segment_order - b.segment_order)
+
+    const ordered = [...finished, target, ...rest]
+
+    await Promise.all(
+      ordered.map((s, idx) =>
+        supabase.from('draft_segments').update({
+          segment_order: idx,
+          status: finishedIds.has(s.id) ? 'completed' : s.id === target.id ? 'active' : 'pending',
+        }).eq('id', s.id)
+      )
+    )
+
+    const nextNumber = picks.length + 1
+    const schedule = await buildSchedule(supabase, leagueId)
+    const next = schedule.find(p => p.overall_pick_number === nextNumber)
+
+    await supabase.from('draft_state').update({
+      current_segment_id: target.id,
+      current_overall_pick_number: nextNumber,
+      current_player_user_id: next?.player_user_id ?? null,
+    }).eq('league_id', leagueId)
+
+    await writeAuditLog({
+      league_id: leagueId,
+      actor_user_id: admin.id,
+      action: 'set_category',
+      entity_type: 'draft_segment',
+      entity_id: target.id,
+      after_json: { category, starting_at_pick: nextNumber },
+    })
+
+    return NextResponse.json({ success: true, category, starting_at_pick: nextNumber })
   }
 
   // ── START ─────────────────────────────────────────────────────────────────
